@@ -3,7 +3,7 @@
 #include "RobotWifiAP.h"
 
 /** @brief WiFi access-point and TCP server used for optional telemetry. */
-RobotWifiAP_c server("myAP", "myPassword", 80);
+RobotWifiAP_c server("daniel", "2209", 80);
 
 #include "Robot.h"
 #include "RobotIMU.h"
