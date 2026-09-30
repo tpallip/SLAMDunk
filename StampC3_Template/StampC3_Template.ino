@@ -3,7 +3,7 @@
 #include "RobotWifiAP.h"
 
 /** @brief WiFi access-point and TCP server used for optional telemetry. */
-RobotWifiAP_c server("myAP", "myPassword", 80);
+RobotWifiAP_c server("lokum", "lokum123", 80);
 
 #include "Robot.h"
 #include "RobotIMU.h"
@@ -24,7 +24,7 @@ void setup() {
   Serial.begin(115200);
   server.begin();
 
-  robot.initialise();
+  robot.initialise("SLAMDunk");
 //  robot.initialise("team name");
 
 
