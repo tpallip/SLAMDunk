@@ -24,7 +24,7 @@ void setup() {
   Serial.begin(115200);
   server.begin();
 
-  robot.initialise();
+  robot.initialise("SLAMDunk");
 //  robot.initialise("team name");
 
 
