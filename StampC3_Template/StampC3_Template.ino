@@ -32,7 +32,7 @@ void setup() {
   // come directly from the sensor ICs and do not pass through the middleware.
   if (!imu.initialise() ) {
     Serial.println("Warning: LSM6DS33 IMU was not detected.");
-    robot.setLED( 90, 50, 0, 100 ); // orange warning
+    robot.setLED( 90, 50, 0, 100 ); // orange warning 90,50,0
   }
 
 }
@@ -43,6 +43,7 @@ void loop() {
   // Accept or maintain the optional Processing telemetry connection. The
   // controller continues to run even when no client is connected.
   server.update();
+  
 
   
   // Run an iteration of the robot controller code.

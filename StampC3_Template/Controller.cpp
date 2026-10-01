@@ -80,12 +80,17 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
     if (robot.isButtonPressed()) {
       setSignal(1);
     }
+    robot.setMotorPWM(0, 0);
+
   }
 
   // The user has started the demonstration, so we run the line following
   // controller code.
   if (signal == 1) {
     runLineFollower(robot, now);
+    if (robot.isButtonPressed()) {
+      setSignal(0);
+    }
 
   }
 

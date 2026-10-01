@@ -32,13 +32,13 @@ class Controller_c {
     /** @brief Surface-reading threshold used to decide whether a line is present. */
     static const uint16_t LINE_THRESHOLD = 1400;
     /** @brief Nominal forward PWM bias for line following. */
-    static constexpr float BASE_PWM = 45.0f;
+    static constexpr float BASE_PWM = 90.0f;
     /** @brief Proportional gain applied to the DN2-minus-DN4 surface error. */
     static constexpr float LINE_FOLLOW_GAIN = 0.01f;
     /** @brief Left PWM used during the one-direction line-search rotation. */
-    static constexpr float RECOVERY_LEFT_PWM = -35.0f;
+    static constexpr float RECOVERY_LEFT_PWM = -45.0f;
     /** @brief Right PWM used during the one-direction line-search rotation. */
-    static constexpr float RECOVERY_RIGHT_PWM = 35.0f;
+    static constexpr float RECOVERY_RIGHT_PWM = 45.0f;
 
     /** @brief Creates a controller in its waiting state. */
     Controller_c();
