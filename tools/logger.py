@@ -14,9 +14,6 @@ PORT = 80
 TIMEOUT_S = 3
 USE_RERUN = True          # stream every record to a Rerun viewer
 HEADING_ARROW_MM = 30     # length of the heading arrow drawn at the robot
-SURFACE_MAX = 2942        # highest surface reading (black, or robot lifted)
-LINE_THRESHOLD = 1400     # Controller_c::LINE_THRESHOLD, drawn on the profile
-PROFILE_HEIGHT = 4        # drawn height of SURFACE_MAX; sensors are 1 unit apart
 
 # Field order sent by Controller_c::publishTelemetry (see Controller.h).
 COLUMNS = [
@@ -77,7 +74,7 @@ def make_blueprint():
                 rrb.TimeSeriesView(origin="motors", name="Motor PWM"),
                 rrb.TimeSeriesView(origin="encoders", name="Encoders"),
                 rrb.TimeSeriesView(origin="surface/series", name="Surface sensors"),
-                rrb.Spatial2DView(origin="surface/profile", name="Surface profile"),
+                rrb.BarChartView(origin="surface/now", name="Surface now"),
             ),
         ),
     )
@@ -108,36 +105,7 @@ def log_to_rerun(fields):
     surface = [values[f"dn{i}"] for i in range(1, 6)]
     for i, reading in enumerate(surface, start=1):
         rr.log(f"surface/series/dn{i}", rr.Scalars(reading))
-
-    # Profile across the sensor array: x is the sensor number (dn1 left to dn5
-    # right), height is the reading. y is negated so higher readings draw upward.
-    profile = [[i, -surface_height(reading)] for i, reading in enumerate(surface, start=1)]
-    rr.log("surface/profile/line", rr.LineStrips2D([profile]))
-    rr.log("surface/profile/sensors", rr.Points2D(
-        profile,
-        radii=0.08,
-        labels=[f"dn{i} {reading:.0f}" for i, reading in enumerate(surface, start=1)],
-    ))
-
-
-def surface_height(reading):
-    """Drawn height of a surface reading on the profile, 0 to PROFILE_HEIGHT."""
-    return reading / SURFACE_MAX * PROFILE_HEIGHT
-
-
-def log_surface_frame():
-    """Static outline and threshold line that fix the profile view's scale."""
-    top = -PROFILE_HEIGHT
-    rr.log("surface/profile/frame", rr.LineStrips2D(
-        [[[0.5, 0], [5.5, 0], [5.5, top], [0.5, top], [0.5, 0]]],
-        colors=[[128, 128, 128]],
-    ), static=True)
-    threshold = -surface_height(LINE_THRESHOLD)
-    rr.log("surface/profile/threshold", rr.LineStrips2D(
-        [[[0.5, threshold], [5.5, threshold]]],
-        colors=[[255, 80, 80]],
-        labels=[f"line threshold {LINE_THRESHOLD}"],
-    ), static=True)
+    rr.log("surface/now", rr.BarChart(surface))
 
 
 def main():
@@ -149,7 +117,6 @@ def main():
 
     if USE_RERUN:
         rr.init("slamdunk_logger", spawn=True, default_blueprint=make_blueprint())
-        log_surface_frame()
 
     try:
         sock = socket.create_connection((HOST, PORT), timeout=TIMEOUT_S)
