@@ -1,3 +1,7 @@
+import argparse
+import csv
+from datetime import datetime
+from pathlib import Path
 import socket
 import logging
 import errno
@@ -13,7 +17,12 @@ HOST = "192.168.4.1"
 PORT = 80
 TIMEOUT_S = 3
 USE_RERUN = True          # stream every record to a Rerun viewer
+USE_CSV = True            # save every record to a CSV file in LOG_DIR (--csv/--no-csv)
+LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
 HEADING_ARROW_MM = 30     # length of the heading arrow drawn at the robot
+SURFACE_MAX = 2942        # highest surface reading (black, or robot lifted)
+LINE_THRESHOLD = 1400     # Controller_c::LINE_THRESHOLD, drawn on the profile
+PROFILE_HEIGHT = 4        # drawn height of SURFACE_MAX; sensors are 1 unit apart
 
 # Field order sent by Controller_c::publishTelemetry (see Controller.h).
 COLUMNS = [
@@ -58,8 +67,19 @@ def make_table(fields):
     return table
 
 
-def make_blueprint():
-    """Rerun viewer layout: robot path on the left, time series on the right."""
+# Panes in the Rerun layout, by the name used with --use.
+PANES = ["path", "pose", "motors", "encoders", "surface", "profile", "bars"]
+
+
+def make_blueprint(used=PANES):
+    """Rerun viewer layout: robot path on the left, time series on the right.
+
+    Only panes named in used start switched on; turn the others on with the
+    eye icon in the viewer's blueprint panel.
+    """
+    def shown(pane):
+        return pane in used
+
     # Show every point up to the time cursor, so the path leaves a trail.
     trail = rrb.VisibleTimeRange(
         "robot_time",
@@ -68,13 +88,20 @@ def make_blueprint():
     )
     return rrb.Blueprint(
         rrb.Horizontal(
-            rrb.Spatial2DView(origin="world", name="Path", time_ranges=[trail]),
+            rrb.Spatial2DView(origin="world", name="Path", time_ranges=[trail],
+                              visible=shown("path")),
             rrb.Vertical(
-                rrb.TimeSeriesView(origin="pose", name="Pose"),
-                rrb.TimeSeriesView(origin="motors", name="Motor PWM"),
-                rrb.TimeSeriesView(origin="encoders", name="Encoders"),
-                rrb.TimeSeriesView(origin="surface/series", name="Surface sensors"),
-                rrb.BarChartView(origin="surface/now", name="Surface now"),
+                rrb.TimeSeriesView(origin="pose", name="Pose", visible=shown("pose")),
+                rrb.TimeSeriesView(origin="motors", name="Motor PWM", visible=shown("motors")),
+                rrb.TimeSeriesView(origin="encoders", name="Encoders", visible=shown("encoders")),
+                rrb.TimeSeriesView(origin="surface/series", name="Surface sensors",
+                                   visible=shown("surface")),
+                rrb.Horizontal(
+                    rrb.Spatial2DView(origin="surface/profile", name="Surface profile",
+                                      visible=shown("profile")),
+                    rrb.BarChartView(origin="surface/now", name="Surface now",
+                                     visible=shown("bars")),
+                ),
             ),
         ),
     )
@@ -107,16 +134,82 @@ def log_to_rerun(fields):
         rr.log(f"surface/series/dn{i}", rr.Scalars(reading))
     rr.log("surface/now", rr.BarChart(surface))
 
+    # Profile across the sensor array: x is the sensor number (dn1 left to dn5
+    # right), height is the reading. y is negated so higher readings draw upward.
+    profile = [[i, -surface_height(reading)] for i, reading in enumerate(surface, start=1)]
+    rr.log("surface/profile/line", rr.LineStrips2D([profile]))
+    rr.log("surface/profile/sensors", rr.Points2D(
+        profile,
+        radii=0.08,
+        labels=[f"dn{i} {reading:.0f}" for i, reading in enumerate(surface, start=1)],
+    ))
+
+
+def surface_height(reading):
+    """Drawn height of a surface reading on the profile, 0 to PROFILE_HEIGHT."""
+    return reading / SURFACE_MAX * PROFILE_HEIGHT
+
+
+def log_surface_frame():
+    """Static outline and threshold line that fix the profile view's scale."""
+    top = -PROFILE_HEIGHT
+    rr.log("surface/profile/frame", rr.LineStrips2D(
+        [[[0.5, 0], [5.5, 0], [5.5, top], [0.5, top], [0.5, 0]]],
+        colors=[[128, 128, 128]],
+    ), static=True)
+    threshold = -surface_height(LINE_THRESHOLD)
+    rr.log("surface/profile/threshold", rr.LineStrips2D(
+        [[[0.5, threshold], [5.5, threshold]]],
+        colors=[[255, 80, 80]],
+        labels=[f"line threshold {LINE_THRESHOLD}"],
+    ), static=True)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Stream SLAMDunk telemetry to a table and Rerun.")
+    parser.add_argument(
+        "--use", nargs="+", default=PANES, choices=PANES, metavar="PANE",
+        help=f"Rerun panes to show (default: all): {', '.join(PANES)}",
+    )
+    parser.add_argument(
+        "--csv", action=argparse.BooleanOptionalAction, default=USE_CSV,
+        help=f"save records to a CSV file in {LOG_DIR.name}/",
+    )
+    parser.add_argument(
+        "--name", metavar="NAME",
+        help="CSV file name instead of run_<timestamp>, e.g. --name straight_line",
+    )
+    return parser.parse_args()
+
+
+def csv_path_for(name):
+    """CSV path for this run: LOG_DIR/<name>.csv, or a timestamped name by default."""
+    if name is None:
+        name = f"run_{datetime.now():%Y%m%d_%H%M%S}"
+    return LOG_DIR / f"{name.removesuffix('.csv')}.csv"
+
 
 def main():
+    args = parse_args()
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(message)s",
         handlers=[RichHandler()],
     )
 
+    if args.csv:
+        csv_path = csv_path_for(args.name)
+        # Checked before connecting, so a clash doesn't cost a connection attempt.
+        if csv_path.exists():
+            log.error("%s already exists; pick another --name.", csv_path)
+            return
+    elif args.name is not None:
+        log.warning("--name ignored: CSV logging is off.")
+
     if USE_RERUN:
-        rr.init("slamdunk_logger", spawn=True, default_blueprint=make_blueprint())
+        rr.init("slamdunk_logger", spawn=True, default_blueprint=make_blueprint(args.use))
+        log_surface_frame()
 
     try:
         sock = socket.create_connection((HOST, PORT), timeout=TIMEOUT_S)
@@ -135,6 +228,15 @@ def main():
 
     buffer = b""
     latest = None
+    csv_writer = None
+
+    if args.csv:
+        LOG_DIR.mkdir(exist_ok=True)
+        # Line buffered, so every record is on disk even if the logger is killed.
+        csv_file = open(csv_path, "w", newline="", buffering=1)
+        csv_writer = csv.writer(csv_file)
+        csv_writer.writerow(COLUMNS)
+        log.info("saving records to %s", csv_path)
 
     with Live(make_table(latest), refresh_per_second=10) as live:
         while True:
@@ -160,6 +262,8 @@ def main():
                 fields = parse_line(text)
                 if fields is not None:
                     latest = fields
+                    if csv_writer is not None:
+                        csv_writer.writerow(fields)
                     if USE_RERUN:
                         log_to_rerun(fields)
             buffer = parts[-1]
@@ -170,6 +274,9 @@ def main():
         log.warning("discarding incomplete last line: %r", buffer)
 
     sock.close()
+    if csv_writer is not None:
+        csv_file.close()
+        log.info("records saved to %s", csv_path)
     log.info("logger stopped.")
 
 

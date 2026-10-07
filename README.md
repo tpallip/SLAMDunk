@@ -232,6 +232,8 @@ Settings are constants at the top of `tools/logger.py`:
 | `PORT` | `80` | `9000` | TCP port |
 | `TIMEOUT_S` | `3` | `3` | Seconds of silence before giving up |
 | `USE_RERUN` | `True` | `True` | Open the Rerun viewer |
+| `USE_CSV` | `True` | `True` | Save every record to a CSV file (default for `--csv`/`--no-csv`) |
+| `LOG_DIR` | `logs/` | `logs/` | Folder for the CSV files |
 
 Then, with the virtual environment active:
 
@@ -279,6 +281,21 @@ Notes on the viewer:
 - Without a display (for example, over SSH) the viewer cannot open. Set
   `USE_RERUN = False`.
 
+**CSV file** (on by default): every valid record is saved to
+`logs/run_YYYYMMDD_HHMMSS.csv`, one file per run, named by the time the logger
+started. Options:
+
+```bash
+python tools/logger.py --name straight_line   # save to logs/straight_line.csv
+python tools/logger.py --no-csv               # don't save a CSV this run
+```
+
+`--name` won't overwrite an existing file: the logger stops before
+connecting and asks for another name. The first row is the column names (`t_ms`, `x_mm`, ... `signal`) and
+each record is written as soon as it arrives, so the file is complete even
+after `Ctrl+C`. Skipped lines (wrong field count, not a number) are not saved.
+`logs/` is ignored by git.
+
 ### Log messages
 
 | Message | Meaning |
@@ -322,11 +339,22 @@ to record, and `nc -N -l 9000 < logs/capture.csv` to serve (`-N` closes the
 connection at the end of the file).
 
 
+### Statistics from a saved run (`tools/stats.py`)
+
+Give the CSV file and one or more column names:
+
+```bash
+python tools/stats.py logs/run_20261007_171309.csv dn1 dn2 dn3
+```
+
+For each column it prints the mean, minimum, maximum, standard deviation and
+variance over the whole run, plus the number of records and the run length
+(from `t_ms`). The standard deviation and variance are population values,
+since the file holds every record of the run. An unknown column name prints
+the list of valid ones.
+
 ### Current limitations
 
-- **Records are not saved to disk yet.** The dashboard and Rerun show live data
-  only. Writing to CSV is the next step. Until then, record a raw capture as
-  in step 1 of "Test without the robot".
 - **No automatic reconnect.** The logger exits when the connection drops.
   Restart it after the robot resets.
 - **One client at a time.** While the logger is connected, the Digital Twin
