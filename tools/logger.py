@@ -2,8 +2,10 @@ import argparse
 import csv
 from datetime import datetime
 from pathlib import Path
+import select
 import socket
 import logging
+import time
 import errno
 from rich.table import Table
 from rich.live import Live
@@ -12,13 +14,17 @@ import math
 import rerun as rr
 import rerun.blueprint as rrb
 
-# Robot: "192.168.4.1", 80. Local test with nc: "127.0.0.1", 9000.
+# Robot: "192.168.4.1", 80 (defaults for --host and --port).
+# Local test with tools/fake_robot.py: --host 127.0.0.1 --port 9000.
 HOST = "192.168.4.1"
 PORT = 80
 TIMEOUT_S = 3
 USE_RERUN = True          # stream every record to a Rerun viewer
 USE_CSV = True            # save every record to a CSV file in LOG_DIR (--csv/--no-csv)
 LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
+USE_TELEOP = True         # accept commands from tools/teleop.py (--teleop/--no-teleop)
+TELEOP_HOST = "127.0.0.1" # local only, so nobody else on the network can drive the robot
+TELEOP_PORT = 9100
 HEADING_ARROW_MM = 30     # length of the heading arrow drawn at the robot
 SURFACE_MAX = 2942        # highest surface reading (black, or robot lifted)
 LINE_THRESHOLD = 1400     # Controller_c::LINE_THRESHOLD, drawn on the profile
@@ -165,8 +171,69 @@ def log_surface_frame():
     ), static=True)
 
 
+class TeleopServer:
+    """Local TCP port where tools/teleop.py sends commands to forward to the robot.
+
+    Accepts one teleop client at a time. Commands are forwarded only as complete
+    lines, so a teleop that disconnects mid-command can't leave half a command
+    on the robot's side to merge with the next one.
+    """
+
+    def __init__(self, host, port, robot):
+        self.robot = robot   # "host:port" of the robot, for the greeting
+        self.listener = socket.create_server((host, port))
+        self.listener.setblocking(False)
+        self.client = None
+        self.buffer = b""
+
+    def sockets(self):
+        """Sockets to watch for incoming connections or commands."""
+        return [self.listener] + ([self.client] if self.client else [])
+
+    def accept(self):
+        try:
+            conn, addr = self.listener.accept()
+        except BlockingIOError:
+            return
+        if self.client is not None:
+            conn.sendall(b"busy: another teleop is already connected\n")
+            conn.close()
+            log.warning("refused a second teleop from %s:%s", *addr)
+            return
+        self.client = conn
+        self.buffer = b""
+        conn.sendall(f"connected to logger, robot at {self.robot}\n".encode())
+        log.info("teleop connected from %s:%s", *addr)
+
+    def read_commands(self):
+        """Complete command lines received from the client, or None if it left."""
+        try:
+            data = self.client.recv(4096)
+        except OSError:
+            data = b""
+        if not data:
+            self.drop_client()
+            return None
+
+        self.buffer += data
+        *lines, self.buffer = self.buffer.split(b"\n")
+        return [line.strip() for line in lines if line.strip()]
+
+    def drop_client(self):
+        self.client.close()
+        self.client = None
+        self.buffer = b""
+
+    def close(self):
+        if self.client is not None:
+            self.drop_client()
+        self.listener.close()
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Stream SLAMDunk telemetry to a table and Rerun.")
+    parser.add_argument("--host", default=HOST, help=f"robot address (default: {HOST})")
+    parser.add_argument("--port", type=int, default=PORT, help=f"robot port (default: {PORT})")
     parser.add_argument(
         "--use", nargs="+", default=PANES, choices=PANES, metavar="PANE",
         help=f"Rerun panes to show (default: all): {', '.join(PANES)}",
@@ -178,6 +245,10 @@ def parse_args():
     parser.add_argument(
         "--name", metavar="NAME",
         help="CSV file name instead of run_<timestamp>, e.g. --name straight_line",
+    )
+    parser.add_argument(
+        "--teleop", action=argparse.BooleanOptionalAction, default=USE_TELEOP,
+        help=f"accept commands from tools/teleop.py on {TELEOP_HOST}:{TELEOP_PORT}",
     )
     return parser.parse_args()
 
@@ -212,7 +283,7 @@ def main():
         log_surface_frame()
 
     try:
-        sock = socket.create_connection((HOST, PORT), timeout=TIMEOUT_S)
+        sock = socket.create_connection((args.host, args.port), timeout=TIMEOUT_S)
     except ConnectionRefusedError:
         log.error("Server not listening. Robot must be booting.")
         return
@@ -229,6 +300,14 @@ def main():
     buffer = b""
     latest = None
     csv_writer = None
+    teleop = None
+
+    if args.teleop:
+        try:
+            teleop = TeleopServer(TELEOP_HOST, TELEOP_PORT, f"{args.host}:{args.port}")
+            log.info("teleop: run tools/teleop.py to send commands (port %s)", TELEOP_PORT)
+        except OSError as e:
+            log.error("teleop disabled, can't listen on port %s: %s", TELEOP_PORT, e)
 
     if args.csv:
         LOG_DIR.mkdir(exist_ok=True)
@@ -238,16 +317,45 @@ def main():
         csv_writer.writerow(COLUMNS)
         log.info("saving records to %s", csv_path)
 
+    last_data = time.monotonic()
+
     with Live(make_table(latest), refresh_per_second=10) as live:
         while True:
+            # Wait for whichever comes first: robot telemetry, a new teleop
+            # connection, or a teleop command. The short timeout lets the
+            # no-data check run even when nothing arrives.
+            watched = [sock] + (teleop.sockets() if teleop else [])
+            readable, _, _ = select.select(watched, [], [], 0.1)
+
+            if teleop is not None:
+                if teleop.listener in readable:
+                    teleop.accept()
+                if teleop.client is not None and teleop.client in readable:
+                    commands = teleop.read_commands()
+                    try:
+                        if commands is None:
+                            # Don't leave the robot driving on the last command.
+                            log.info("teleop disconnected: sending stop")
+                            sock.sendall(b"stop\n")
+                        else:
+                            for command in commands:
+                                sock.sendall(command + b"\n")
+                                log.info("teleop -> robot: %s",
+                                         command.decode("utf-8", errors="replace"))
+                    except OSError as e:
+                        log.error("couldn't send to robot: %s", e)
+                        break
+
+            if sock not in readable:
+                if time.monotonic() - last_data > TIMEOUT_S:
+                    log.error("no data for %s s: robot reset or out of range.", TIMEOUT_S)
+                    break
+                continue
+
             try:
                 data = sock.recv(4096)
                 if not data:
                     raise ConnectionError("Closed by the server.")
-
-            except socket.timeout:
-                log.error("no data for %s s: robot reset or out of range.", TIMEOUT_S)
-                break
             except ConnectionError as e:
                 log.info("connection ended: %s", e)
                 break
@@ -255,6 +363,7 @@ def main():
                 log.exception("unexpected error while reading")
                 break
 
+            last_data = time.monotonic()
             buffer += data
             parts = buffer.split(b"\n")
             for line in parts[:-1]:
@@ -274,6 +383,8 @@ def main():
         log.warning("discarding incomplete last line: %r", buffer)
 
     sock.close()
+    if teleop is not None:
+        teleop.close()
     if csv_writer is not None:
         csv_file.close()
         log.info("records saved to %s", csv_path)

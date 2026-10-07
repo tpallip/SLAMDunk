@@ -228,8 +228,8 @@ Settings are constants at the top of `tools/logger.py`:
 
 | Constant | Robot | Local test | Meaning |
 |---|---|---|---|
-| `HOST` | `"192.168.4.1"` | `"127.0.0.1"` | Address to connect to |
-| `PORT` | `80` | `9000` | TCP port |
+| `HOST` | `"192.168.4.1"` | `"127.0.0.1"` | Address to connect to (default for `--host`) |
+| `PORT` | `80` | `9000` | TCP port (default for `--port`) |
 | `TIMEOUT_S` | `3` | `3` | Seconds of silence before giving up |
 | `USE_RERUN` | `True` | `True` | Open the Rerun viewer |
 | `USE_CSV` | `True` | `True` | Save every record to a CSV file (default for `--csv`/`--no-csv`) |
@@ -310,34 +310,63 @@ after `Ctrl+C`. Skipped lines (wrong field count, not a number) are not saved.
 
 ### Test without the robot
 
-The logger can be tested entirely on your computer, using a saved capture and
-a small server pretending to be the robot. No robot or robot WiFi is needed.
-These commands work on Linux, macOS and Windows (on Windows, use `\` instead of
-`/` in the file paths if a command can't find the file).
+`tools/fake_robot.py` stands in for the robot on your computer: it replays any
+CSV saved by the logger as live telemetry (every 50 ms, on a loop) and prints
+every command it receives. Commands change the replayed data the way the
+firmware would (`manual` + `pwm 40 40` shows up in the pwm columns, `start`
+sets `signal`), so you can test the logger and the teleop end to end. No
+robot or robot WiFi is needed.
 
-1. Record a capture once, while connected to the robot. Press `Ctrl+C` after a
-   few seconds; the traceback it prints is expected.
+1. Terminal 1, the fake robot (any CSV from `logs/` works):
    ```bash
-   python -c "import socket; s=socket.create_connection(('192.168.4.1',80)); f=open('logs/capture.csv','wb'); [f.write(d) for d in iter(lambda: s.recv(4096), b'')]"
+   python tools/fake_robot.py logs/all_white.csv
    ```
-2. Set `HOST = "127.0.0.1"` and `PORT = 9000` in `tools/logger.py`.
-3. In one terminal, serve the capture:
+2. Terminal 2, the logger pointed at it:
    ```bash
-   python -c "import socket,sys; s=socket.create_server(('127.0.0.1',9000)); c,_=s.accept(); c.sendall(open(sys.argv[1],'rb').read()); c.close()" logs/capture.csv
+   python tools/logger.py --host 127.0.0.1 --port 9000
    ```
-4. In another terminal, run the logger:
+3. Terminal 3, optionally, the teleop:
    ```bash
-   python tools/logger.py
+   python tools/teleop.py
    ```
 
-The server exits after one connection, so rerun step 3 before each test. It
-closes the connection after sending the file, so the logger should end with
-`connection ended: Closed by the server.`
+The fake robot prints each command and its effect, for example
+`robot got 'pwm 40 40' -> mode=manual signal=0 pwm=40,40`. It keeps running
+after the logger disconnects and waits for the next one; stop it with
+`Ctrl+C`. `--port` changes its port.
 
-On Linux, `nc` does the same jobs: `nc 192.168.4.1 80 | tee logs/capture.csv`
-to record, and `nc -N -l 9000 < logs/capture.csv` to serve (`-N` closes the
-connection at the end of the file).
+To test against a particular recording, save one from the robot with the
+logger (`--name my_capture`) and replay that file.
 
+
+### Teleop: send commands to the robot (`tools/teleop.py`)
+
+The robot accepts one TCP client, so commands go through the logger's
+connection. The logger listens on `127.0.0.1:9100` (this computer only) for a
+teleop client and forwards each line it receives to the robot. Start the
+logger first, then in a second terminal:
+
+```bash
+python tools/teleop.py
+```
+
+```
+> manual           # manual control, motors stopped
+> pwm 40 40        # left/right motor PWM, clamped on the robot to ±100
+> pwm -30 30       # turn on the spot
+> stop             # stop the motors
+> auto             # back to the line follower, waiting
+> start            # start the line follower
+> help             # list commands; quit (or Ctrl+D) exits
+```
+
+- The logger prints each forwarded command (`teleop -> robot: ...`) above the
+  table, and the CSV keeps recording while you drive.
+- When the teleop exits or disconnects, the logger sends `stop`. This also
+  stops a line-follower run started from the teleop.
+- One teleop at a time; a second one is told the logger is busy.
+- `--no-teleop` runs the logger without the teleop port. The port is set by
+  `TELEOP_PORT` in `tools/logger.py` (and `PORT` in `tools/teleop.py`).
 
 ### Statistics from a saved run (`tools/stats.py`)
 
