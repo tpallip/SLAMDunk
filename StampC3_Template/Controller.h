@@ -39,6 +39,12 @@ class Controller_c {
     static constexpr float RECOVERY_LEFT_PWM = -35.0f;
     /** @brief Right PWM used during the one-direction line-search rotation. */
     static constexpr float RECOVERY_RIGHT_PWM = 35.0f;
+    /** @brief Largest PWM magnitude accepted by the "pwm" command in manual mode. */
+    static constexpr float MANUAL_MAX_PWM = 100.0f;
+    /** @brief Manual mode stops the motors if no "pwm" command arrives for this
+     * long. Zero disables the check, so a typed command keeps the robot moving;
+     * set it (for example to 500) when a program streams commands. */
+    static const unsigned long MANUAL_TIMEOUT_MS = 0;
 
     /** @brief Creates a controller in its waiting state. */
     Controller_c();
@@ -85,8 +91,20 @@ class Controller_c {
       STOPPED
     };
 
+    enum UsrMode {
+      MANUAL_CTRL,
+      AUTO
+    };
+
     uint8_t signal;
     Mode mode;
+    UsrMode usr_mode;
+    char cmd_buf[64];
+    uint8_t cmd_len = 0;
+    char mode_message[64] = "";  // last complete command, kept until the next one
+    float manual_left_pwm = 0.0f;
+    float manual_right_pwm = 0.0f;
+    unsigned long manual_cmd_ms = 0;   // time of the last "pwm" command
     TaskTimer_c update_timer;
     TaskTimer_c telemetry_timer;
     unsigned long recovery_start_ms;
@@ -108,6 +126,17 @@ class Controller_c {
      * that every cached reading was successfully refreshed in that cycle.
      */
     void publishTelemetry(Robot_c &robot, RobotWifiAP_c &server, unsigned long timestamp_ms);
+    int readClient(RobotWifiAP_c &client);
+
+    /**
+     * @brief Acts on the complete command in cmd_buf.
+     * @note Commands: "auto" and "manual" switch mode and stop the motors;
+     * "start" starts the line follower in auto mode; "stop" stops the motors
+     * (and returns auto mode to waiting); "pwm <left> <right>" sets the motor
+     * PWM in manual mode, clamped to MANUAL_MAX_PWM. Unknown commands are
+     * reported on Serial and ignored.
+     */
+    void handleCommand(Robot_c &robot, unsigned long now);
 };
 
 #endif
