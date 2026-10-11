@@ -8,9 +8,33 @@ constexpr float Controller_c::BASE_PWM;
 constexpr float Controller_c::LINE_FOLLOW_GAIN;
 constexpr float Controller_c::RECOVERY_LEFT_PWM;
 constexpr float Controller_c::RECOVERY_RIGHT_PWM;
+constexpr float Controller_c::MANUAL_MAX_PWM;
+const unsigned long Controller_c::MANUAL_TIMEOUT_MS;
+constexpr float Controller_c::MANUAL_MAX_SPEED_MM_S;
+constexpr float Controller_c::SPEED_KP;
+constexpr float Controller_c::SPEED_KI;
+constexpr float Controller_c::LEFT_BREAKAWAY_PWM;
+constexpr float Controller_c::RIGHT_BREAKAWAY_PWM;
+constexpr float Controller_c::LEFT_RUN_MIN_PWM;
+constexpr float Controller_c::RIGHT_RUN_MIN_PWM;
+constexpr float Controller_c::LEFT_FF_OFFSET_PWM;
+constexpr float Controller_c::LEFT_FF_MM_S_PER_PWM;
+constexpr float Controller_c::RIGHT_FF_OFFSET_PWM;
+constexpr float Controller_c::RIGHT_FF_MM_S_PER_PWM;
+constexpr float Controller_c::MOVE_KP;
+constexpr float Controller_c::MOVE_MAX_SPEED_MM_S;
+constexpr float Controller_c::MOVE_MIN_SPEED_MM_S;
+constexpr float Controller_c::MOVE_TOLERANCE_MM;
+constexpr float Controller_c::MOVE_STOP_LEAD_S;
+constexpr float Controller_c::MOVE_MAX_DISTANCE_MM;
 
 Controller_c::Controller_c()
-  : update_timer(UPDATE_INTERVAL_MS),
+  : left_speed(SPEED_KP, SPEED_KI, LEFT_FF_OFFSET_PWM, LEFT_FF_MM_S_PER_PWM,
+               MANUAL_MAX_PWM, LEFT_BREAKAWAY_PWM, LEFT_RUN_MIN_PWM),
+    right_speed(SPEED_KP, SPEED_KI, RIGHT_FF_OFFSET_PWM, RIGHT_FF_MM_S_PER_PWM,
+                MANUAL_MAX_PWM, RIGHT_BREAKAWAY_PWM, RIGHT_RUN_MIN_PWM),
+    mover(MOVE_KP, MOVE_MAX_SPEED_MM_S, MOVE_MIN_SPEED_MM_S, MOVE_TOLERANCE_MM, MOVE_STOP_LEAD_S),
+    update_timer(UPDATE_INTERVAL_MS),
     telemetry_timer(TELEMETRY_INTERVAL_MS) {
   reset();
 }
@@ -18,8 +42,8 @@ Controller_c::Controller_c()
 void Controller_c::reset() {
   signal = 0;
   mode = WAITING;
+  usr_mode = AUTO;
   recovery_start_ms = 0;
-
 }
 
 uint8_t Controller_c::getSignal() const {
@@ -60,6 +84,12 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
   // begins counting again.  We now run the remaining controller code.
   update_timer.resetTimer(now);
 
+  // Act on every complete command the client has sent since the last cycle.
+  // readClient() never waits, so this costs nothing when no data has arrived.
+  while(readClient(server) > 0) {
+    handleCommand(robot, now);
+  }
+
   // Ask the robot for latest information on surface reflectance sensors.
   robot.getSurfaceSensors();
 
@@ -67,6 +97,13 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
   // to update the odometry on board the StampC3 (see OdometryModel.h).
   if (robot.getEncoders()) {
     odometry.update(robot.getLeftEncoderCount(), robot.getRightEncoderCount());
+
+    // Wheel speeds for the "vel" command, using the odometry's wheel geometry.
+    float counts_per_rev = odometry.encoderCountsPerRevolution;
+    left_speed.measure(robot.getLeftEncoderCount(), now,
+                       TWO_PI * odometry.leftWheelRadiusMm / counts_per_rev);
+    right_speed.measure(robot.getRightEncoderCount(), now,
+                        TWO_PI * odometry.rightWheelRadiusMm / counts_per_rev);
   }
 
   // Pose estimation from the Pololu 3Pi robot itself.
@@ -76,19 +113,49 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
   // robot's line follower, even without Processing connected. The transmitted
   // signal also starts an armed Digital Twin live comparison. This is a start
   // control, not a start/stop toggle; further presses are ignored while signal is 1.
-  if (signal == 0) {
-    if (robot.isButtonPressed()) {
-      setSignal(1);
+  if(usr_mode == AUTO) {
+    if (signal == 0) {
+      if (robot.isButtonPressed()) {
+        setSignal(1);
+      }
+    }
+
+    // The user has started the demonstration, so we run the line following
+    // controller code.
+    if (signal == 1) {
+      runLineFollower(robot, now);
+
     }
   }
-
-  // The user has started the demonstration, so we run the line following
-  // controller code.
-  if (signal == 1) {
-    runLineFollower(robot, now);
-
+  else if(usr_mode == MANUAL_CTRL) {
+    // Stop if the client has gone, or (when enabled) if "pwm"/"vel" commands
+    // stopped arriving, so a lost connection can't leave the robot driving.
+    // A "move" ends by itself (or at its own deadline), so it isn't resent
+    // and the command timeout doesn't apply while it runs.
+    bool timed_out = MANUAL_TIMEOUT_MS > 0 && !mover.isActive()
+                     && now - manual_cmd_ms > MANUAL_TIMEOUT_MS;
+    if(!server.clientConnected() || timed_out) {
+      clearManual();
+    }
+    if(mover.isActive()) {
+      float left_target, right_target;
+      if(!mover.update(robot.getLeftEncoderCount(), robot.getRightEncoderCount(), now,
+                       left_target, right_target)) {
+        Serial.printf("move %s: left %+.2f mm, right %+.2f mm still to go\n",
+                      mover.timedOut() ? "timed out" : "done",
+                      mover.getLeftError(), mover.getRightError());
+      }
+      left_speed.setTarget(left_target);
+      right_speed.setTarget(right_target);
+    }
+    if(manual_vel) {
+      float dt_s = (now - last_manual_ms) / 1000.0f;
+      manual_left_pwm = left_speed.update(dt_s);
+      manual_right_pwm = right_speed.update(dt_s);
+    }
+    last_manual_ms = now;
+    robot.setMotorPWM(manual_left_pwm, manual_right_pwm);
   }
-
   // Use another TaskTimer_c to limit how often we transmit telemetry data
   // on WiFi and Serial.
   if (telemetry_timer.isReady(now)) {
@@ -105,6 +172,14 @@ bool Controller_c::lineDetected(const Robot_c &robot) const {
   }
 
   return false;
+}
+
+void Controller_c::clearManual() {
+  manual_left_pwm = 0.0f;
+  manual_right_pwm = 0.0f;
+  left_speed.reset();
+  right_speed.reset();
+  mover.cancel();
 }
 
 void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
@@ -174,5 +249,106 @@ void Controller_c::publishTelemetry(Robot_c &robot, RobotWifiAP_c &server, unsig
       robot.surface.reading[4],
       signal
     );
+  }
+}
+
+int Controller_c::readClient(RobotWifiAP_c &client) {
+  if(!client.clientConnected()) {
+    cmd_len = 0;
+    return 0;
+  }
+
+  while(client.available() > 0) {
+    int recvd_byte = client.read();
+    if(recvd_byte < 0){
+      return 0;
+    }
+
+    if(recvd_byte == '\n') {
+      // Command complete: terminate it and keep a copy in mode_message.
+      // An empty line leaves the previous mode_message in place.
+      cmd_buf[cmd_len] = '\0';
+      if(cmd_len > 0) {
+        memcpy(mode_message, cmd_buf, cmd_len + 1);  // +1 copies the '\0'
+      }
+      int len = cmd_len;
+      cmd_len = 0;
+      return len;
+    }
+    else if(recvd_byte == '\r') {
+      // Ignore the '\r' of "\r\n" line endings.
+    }
+    else if(cmd_len < sizeof(cmd_buf) - 1) {
+      // Leave the last slot free for the '\0'.
+      cmd_buf[cmd_len++] = (char)recvd_byte;
+    }
+  }
+
+  return 0;
+}
+
+void Controller_c::handleCommand(Robot_c &robot, unsigned long now) {
+  float left, right;
+
+  if(strcmp(cmd_buf, "auto") == 0) {
+    // reset() returns to waiting in AUTO; start with the button or "start".
+    setSignal(0);
+    robot.setMotorPWM(0, 0);
+  }
+  else if(strcmp(cmd_buf, "manual") == 0) {
+    setSignal(0);  // leaves the line follower; also sets usr_mode to AUTO
+    usr_mode = MANUAL_CTRL;
+    manual_vel = false;
+    clearManual();
+    manual_cmd_ms = now;
+    last_manual_ms = now;
+    robot.setMotorPWM(0, 0);
+  }
+  else if(strcmp(cmd_buf, "start") == 0) {
+    if(usr_mode == AUTO) {
+      setSignal(1);
+    }
+  }
+  else if(strcmp(cmd_buf, "stop") == 0) {
+    if(usr_mode == AUTO) {
+      setSignal(0);
+    }
+    clearManual();
+    robot.setMotorPWM(0, 0);
+  }
+  else if(sscanf(cmd_buf, "pwm %f %f", &left, &right) == 2) {
+    // isfinite rejects "pwm nan 0", which would reach the motors unclamped.
+    if(usr_mode == MANUAL_CTRL && isfinite(left) && isfinite(right)) {
+      manual_vel = false;
+      mover.cancel();
+      left_speed.reset();
+      right_speed.reset();
+      manual_left_pwm = constrain(left, -MANUAL_MAX_PWM, MANUAL_MAX_PWM);
+      manual_right_pwm = constrain(right, -MANUAL_MAX_PWM, MANUAL_MAX_PWM);
+      manual_cmd_ms = now;
+    }
+  }
+  else if(sscanf(cmd_buf, "vel %f %f", &left, &right) == 2) {
+    if(usr_mode == MANUAL_CTRL && isfinite(left) && isfinite(right)) {
+      manual_vel = true;
+      mover.cancel();
+      left_speed.setTarget(constrain(left, -MANUAL_MAX_SPEED_MM_S, MANUAL_MAX_SPEED_MM_S));
+      right_speed.setTarget(constrain(right, -MANUAL_MAX_SPEED_MM_S, MANUAL_MAX_SPEED_MM_S));
+      manual_cmd_ms = now;
+    }
+  }
+  else if(sscanf(cmd_buf, "move %f", &left) == 1) {
+    if(usr_mode == MANUAL_CTRL && isfinite(left)) {
+      float counts_per_rev = odometry.encoderCountsPerRevolution;
+      manual_vel = true;
+      mover.start(constrain(left, -MOVE_MAX_DISTANCE_MM, MOVE_MAX_DISTANCE_MM),
+                  robot.getLeftEncoderCount(), robot.getRightEncoderCount(),
+                  TWO_PI * odometry.leftWheelRadiusMm / counts_per_rev,
+                  TWO_PI * odometry.rightWheelRadiusMm / counts_per_rev, now);
+      manual_cmd_ms = now;
+    }
+  }
+  else {
+    Serial.printf("unknown command: %s\n", cmd_buf);
   }
 }
