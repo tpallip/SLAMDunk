@@ -352,8 +352,10 @@ python tools/teleop.py
 
 ```
 > manual           # manual control, motors stopped
-> pwm 40 40        # left/right motor PWM, clamped on the robot to ±100
-> pwm -30 30       # turn on the spot
+> vel 100 100      # left/right wheel speed in mm/s, held by the robot (max 250)
+> vel -60 60       # turn on the spot
+> pwm 40 40        # raw left/right motor PWM, clamped on the robot to ±100
+> move 10          # drive 10 mm straight, then stop (move -10: backwards)
 > stop             # stop the motors
 > auto             # back to the line follower, waiting
 > start            # start the line follower
@@ -362,11 +364,148 @@ python tools/teleop.py
 
 - The logger prints each forwarded command (`teleop -> robot: ...`) above the
   table, and the CSV keeps recording while you drive.
+- Use `vel` to drive straight. The two motors differ (the left one needs more
+  PWM to start and is slower), so equal `pwm` values make the robot curve.
+  `vel` closes the loop on each wheel's encoder; see "Wheel speed control".
+- `move <mm>` drives a set distance (up to 500 mm) on the encoders, through
+  the speed loop, and stops by itself; Serial prints how far each wheel ended
+  from its target. It slows down near the end and stops each wheel early by
+  the distance it coasts (`MOVE_STOP_LEAD_S`): if steps overshoot on your
+  robot, raise it; if they stop short, lower it. Any other motion command or
+  `stop` cancels a move.
+- In manual mode the robot stops the motors if no `pwm` or `vel` command
+  arrives for 500 ms (`MANUAL_TIMEOUT_MS` in `Controller.h`), so losing WiFi
+  can't leave it driving. The teleop resends a moving `pwm`/`vel` every 0.2 s
+  until your next command, so a typed `vel 100 100` keeps going. A program
+  that sends commands some other way must repeat them itself.
 - When the teleop exits or disconnects, the logger sends `stop`. This also
   stops a line-follower run started from the teleop.
 - One teleop at a time; a second one is told the logger is busy.
 - `--no-teleop` runs the logger without the teleop port. The port is set by
   `TELEOP_PORT` in `tools/logger.py` (and `PORT` in `tools/teleop.py`).
+
+### Wheel speed control (`vel`)
+
+`WheelSpeedController_c` (`StampC3_Template/WheelSpeedController.h`) holds one
+wheel at a target speed. Each control cycle (10 ms) it sets
+
+```
+pwm = feedforward + SPEED_KP * error + SPEED_KI * integral(error)
+feedforward = offset + target / slope        (per wheel)
+```
+
+- **Feedforward** gets each motor close at once despite its deadband and
+  strength. The constants in `Controller.h` (`LEFT_FF_*`, `RIGHT_FF_*`) are a
+  straight-line fit of encoder speed against PWM from
+  `logs/run_20261011_172405.csv`: left 17 PWM + 3.5 mm/s per PWM, right
+  12 PWM + 3.75 mm/s per PWM. Refit them for a different robot.
+- **PI** removes the rest: battery level, load. The integral is cleared when
+  the target is zero or changes direction, and stops growing while the output
+  sits at ±100 PWM. `SPEED_KP = 0.3`, `SPEED_KI = 3` were chosen in simulation
+  (about half the slow-speed wobble of the earlier 0.1 / 1.0).
+- **Stiction compensation.** A motor needs much more PWM to start than to
+  keep turning (on the stand: starts at 30-40+, keeps turning at ~13 left /
+  ~9 right), and the start threshold varies. Two guards:
+  - *Kick:* when a wheel should be turning but no encoder count has arrived
+    for 2.5 count periods at the target speed (at least 30 ms), its PWM starts
+    at the breakaway value (`LEFT_BREAKAWAY_PWM = 30`, `RIGHT_BREAKAWAY_PWM =
+    24`) and rises 200 PWM/s until it moves, with the integral held.
+  - *Floor:* while a wheel is meant to turn, its PWM stays at least
+    `LEFT_RUN_MIN_PWM = 13` / `RIGHT_RUN_MIN_PWM = 9`, so the PI can't pull a
+    wheel that has just lurched free back down until it sticks again.
+- **Speed** is measured over a window long enough for about 6 counts at the
+  previous speed (30-80 ms), capped at one count over the time since the last
+  count, so a stall shows within a few cycles.
+
+#### Speed test (`tools/speed_test.py`)
+
+With the logger running (teleop on) and the robot on a stand:
+
+```bash
+python tools/speed_test.py run                    # vel 20, 30, 50, 80: 4 s each, stops between
+python tools/speed_test.py report logs/<run>.csv  # after stopping the logger
+```
+
+`--spin` spins on the spot instead (for the floor), `--speeds` sets the
+steps. The report gives, per step and wheel: mean speed and error, wobble (sd
+over 100 ms windows, as mm/s and % of target), p5-p95, time stuck, time to
+90 %, start overshoot, PWM mean and sd; plus `summary.csv` and
+`speed_steps.png` in `bench/2.6_speed_control/<run>/`. Run it before and after
+changing a gain to see the effect.
+
+Tuning: lots of wobble but little stuck time, raise `SPEED_KI` (or
+`SPEED_KP`); large start overshoot, lower `SPEED_KI`; still stuck often, raise
+the run floor (`*_RUN_MIN_PWM`); slow targets running fast, lower it.
+
+`pwm` still sets the motors directly, bypassing the speed loop.
+
+### Surface sensor spread (`tools/sensor_spread.py`)
+
+Measures how wide a patch of floor each surface sensor sees (TODO 3.4).
+Spin the robot on the spot over a straight black/white edge; each sensor
+sweeps a 45 mm circle and crosses the edge twice per turn, and the readings
+against distance from the edge give its footprint.
+
+1. Pattern: a straight edge with at least 70 mm of solid black on one side and
+   white on the other (half of an A4 sheet printed black works). Matte, flat,
+   taped down.
+2. Put the midpoint between the wheels over the edge, roughly; the script
+   measures how far off it is.
+3. Logger running, then in the teleop: `manual`, `vel -25 25` for about six
+   turns (~70 s), `stop`, `vel 25 -25` for six more, `stop`.
+4. `python tools/sensor_spread.py logs/<run>.csv --plot`
+
+It finds the spin from the opposite-sign PWM columns and reports per sensor:
+sigma (Gaussian footprint), FWHM, 10-90 % rise distance, white/black levels,
+and the odometry heading scale it calibrated from the crossings. Results go
+to `bench/3.4_spatial_response/<run>/` (`summary.csv`, `profiles.csv`, and
+`spread.png` with `--plot`, which needs `pip install matplotlib`). Measure
+each sensor's distance from the wheel midpoint and pass it with
+`--radius 45 45 45 45 45`; the spread scales with it. If the script warns the
+samples are coarse, spin slower or set `TELEMETRY_INTERVAL_MS` to 20.
+
+### Floor map from a run (`tools/surface_map.py`)
+
+Rebuilds the floor pattern the surface sensors passed over. It recomputes the
+pose from the encoder columns and places each reading at its sensor's floor
+position, so any motion works, including turns that don't stay centred.
+
+```bash
+python tools/surface_map.py logs/<run>.csv --fit-separation --fill 3 --plot
+```
+
+- Output in `bench/surface_map/<run>/`: `map.png` (1 px per `--cell` mm, +y
+  up, grey where no sensor passed), `map.npz` (the grid), and `map_plot.png`
+  with mm axes and the robot's path (`--plot`, needs matplotlib).
+- The wheel separation matters most: a few % off twists later passes against
+  earlier ones. `--fit-separation` picks the value at which overlapping passes
+  agree best; it needs passes that cross the same floor.
+- All five sensors sit on one 45 mm circle, so a spin on the spot images only
+  a thin ring. Move between spins or drive in lanes to cover an area; `--fill`
+  closes small gaps between tracks.
+- Sensor positions default to the Digital Twin's (`--radius`, `--angles`).
+  Measure your robot's: on a spin all five sensors sweep the same ring and
+  their samples interleave, but each degree of angle error shifts a sensor's
+  samples about 0.8 mm.
+- Readings are interpolated along each sensor's track (`--no-interp` to turn
+  off). `--sharp` adds `map_sharp.png`, black or white at the 50 % level.
+- For a sharp map, record slowly: spin with `vel -20 20` (not raw `pwm`, which
+  spins fast and slips) and, for mapping runs, set `TELEMETRY_INTERVAL_MS` to
+  10. That puts samples about 0.2 mm apart instead of 5 mm.
+
+### Surface sensor black/white levels (`tools/sensor_levels.py`)
+
+From a run over tape (such as a slow spin), labels each reading black when
+the sensor was well inside a tape pass and white when well away from any edge
+(`--margin`, default 5 mm), skipping readings near edges. Per sensor it
+reports white and black mean, noise and extremes, the separation, the gap
+between the classes, a suggested threshold, and errors at `LINE_THRESHOLD`.
+
+```bash
+python tools/sensor_levels.py logs/<run>.csv --separation 83.2
+```
+
+Results go to `bench/3.2_sensor_levels/<run>/levels.csv`.
 
 ### Statistics from a saved run (`tools/stats.py`)
 

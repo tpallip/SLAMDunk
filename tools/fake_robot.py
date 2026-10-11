@@ -1,9 +1,11 @@
 """Stand-in for the robot, for testing logger.py and teleop.py without hardware.
 
 Replays a saved CSV as telemetry every TELEMETRY_INTERVAL_MS, on a loop, and
-prints every command it receives. Commands change the replayed records the way
+prints each command it receives (repeats only once). Commands change the replayed records the way
 the firmware would, so the logger shows them: "pwm" sets the pwm columns in
-manual mode, "start" sets signal. Run the logger with --host 127.0.0.1 --port 9000.
+manual mode ("vel" sets them to the firmware's feedforward PWM; there is no
+simulated speed loop), "start" sets signal, and manual mode stops after
+MANUAL_TIMEOUT_MS without a "pwm" or "vel" command. Run the logger with --host 127.0.0.1 --port 9000.
 """
 import argparse
 import select
@@ -12,6 +14,10 @@ import time
 
 TELEMETRY_INTERVAL_MS = 50   # Controller_c::TELEMETRY_INTERVAL_MS
 MANUAL_MAX_PWM = 100.0       # Controller_c::MANUAL_MAX_PWM
+MANUAL_TIMEOUT_MS = 500      # Controller_c::MANUAL_TIMEOUT_MS
+MANUAL_MAX_SPEED_MM_S = 250.0   # Controller_c::MANUAL_MAX_SPEED_MM_S
+# Controller_c::{LEFT,RIGHT}_FF_OFFSET_PWM and _FF_MM_S_PER_PWM
+FEEDFORWARD = ((17.0, 3.5), (12.0, 3.75))
 PWM_LEFT, PWM_RIGHT, SIGNAL = 4, 5, 13   # column indexes in a telemetry record
 
 
@@ -36,6 +42,14 @@ def load_records(path):
     return records
 
 
+def feedforward_pwm(speed_mm_s, offset_pwm, mm_s_per_pwm):
+    """The firmware's feedforward PWM for a wheel speed, whole like the robot reports."""
+    if speed_mm_s == 0:
+        return 0.0
+    pwm = offset_pwm + abs(speed_mm_s) / mm_s_per_pwm
+    return float(int(pwm if speed_mm_s > 0 else -pwm))
+
+
 class FakeController:
     """The parts of Controller_c's command handling that show up in telemetry."""
 
@@ -43,6 +57,7 @@ class FakeController:
         self.manual = False
         self.signal = 0
         self.pwm = (0.0, 0.0)
+        self.pwm_time = 0.0   # time.monotonic() of the last "pwm" or "vel" command
 
     def handle(self, command):
         parts = command.split()
@@ -57,18 +72,37 @@ class FakeController:
             if not self.manual:
                 self.signal = 0
             self.pwm = (0.0, 0.0)
-        elif len(parts) == 3 and parts[0] == "pwm":
+        elif len(parts) == 2 and parts[0] == "move":
+            if not self.manual:
+                return "ignored: not in manual mode"
+            self.pwm = (0.0, 0.0)
+            return f"move {parts[1]} mm accepted (not simulated: the fake robot doesn't drive)"
+        elif len(parts) == 3 and parts[0] in ("pwm", "vel"):
             try:
                 left, right = float(parts[1]), float(parts[2])
             except ValueError:
                 return "unknown command"
             if not self.manual:
                 return "ignored: not in manual mode"
-            clamp = lambda v: max(-MANUAL_MAX_PWM, min(MANUAL_MAX_PWM, v))
-            self.pwm = (clamp(left), clamp(right))
+            clamp = lambda v, limit: max(-limit, min(limit, v))
+            if parts[0] == "vel":
+                self.pwm = tuple(
+                    feedforward_pwm(clamp(v, MANUAL_MAX_SPEED_MM_S), *ff)
+                    for v, ff in zip((left, right), FEEDFORWARD))
+            else:
+                self.pwm = (clamp(left, MANUAL_MAX_PWM), clamp(right, MANUAL_MAX_PWM))
+            self.pwm_time = time.monotonic()
         else:
             return "unknown command"
         return f"mode={'manual' if self.manual else 'auto'} signal={self.signal} pwm={self.pwm[0]:g},{self.pwm[1]:g}"
+
+    def check_timeout(self):
+        """Stops the motors like the firmware does; True if it just did."""
+        timed_out = time.monotonic() - self.pwm_time > MANUAL_TIMEOUT_MS / 1000
+        if self.manual and self.pwm != (0.0, 0.0) and timed_out:
+            self.pwm = (0.0, 0.0)
+            return True
+        return False
 
     def apply(self, fields):
         """A replayed record with this controller's pwm and signal written in."""
@@ -84,8 +118,12 @@ def serve(conn, records):
     controller = FakeController()
     start = time.monotonic()
     buffer = b""
+    last_command = None
     i = 0
     while True:
+        if controller.check_timeout():
+            print(f"no pwm for {MANUAL_TIMEOUT_MS} ms -> motors stopped")
+            last_command = None
         fields = controller.apply(records[i % len(records)])
         fields[0] = str(int((time.monotonic() - start) * 1000))   # own clock, so a replay loop doesn't jump back
         try:
@@ -104,7 +142,11 @@ def serve(conn, records):
             for line in lines:
                 command = line.decode("utf-8", errors="replace").strip()
                 if command:
-                    print(f"robot got {command!r:<16} -> {controller.handle(command)}")
+                    result = controller.handle(command)
+                    # The teleop resends pwm commands; print only changes.
+                    if command != last_command:
+                        print(f"robot got {command!r:<16} -> {result}")
+                    last_command = command
 
 
 def main():

@@ -185,6 +185,7 @@ class TeleopServer:
         self.listener.setblocking(False)
         self.client = None
         self.buffer = b""
+        self.last_command = None   # last command forwarded, to log only changes
 
     def sockets(self):
         """Sockets to watch for incoming connections or commands."""
@@ -223,6 +224,7 @@ class TeleopServer:
         self.client.close()
         self.client = None
         self.buffer = b""
+        self.last_command = None
 
     def close(self):
         if self.client is not None:
@@ -340,8 +342,12 @@ def main():
                         else:
                             for command in commands:
                                 sock.sendall(command + b"\n")
-                                log.info("teleop -> robot: %s",
-                                         command.decode("utf-8", errors="replace"))
+                                # The teleop resends pwm commands several times a
+                                # second; log only when the command changes.
+                                if command != teleop.last_command:
+                                    log.info("teleop -> robot: %s",
+                                             command.decode("utf-8", errors="replace"))
+                                teleop.last_command = command
                     except OSError as e:
                         log.error("couldn't send to robot: %s", e)
                         break
