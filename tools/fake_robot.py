@@ -7,9 +7,11 @@ manual mode ("vel" sets them to the firmware's feedforward PWM; there is no
 simulated speed loop), "start" sets signal, and manual mode stops after
 MANUAL_TIMEOUT_MS without a "pwm" or "vel" command. "ping <id>" is answered
 with "#P <id> <t_ms>" and unknown commands with "#E ...", like the firmware.
+"test deadband ..." runs a fake deadband test (see FakeDeadband).
 Run the logger with --host 127.0.0.1 --port 9000.
 """
 import argparse
+import random
 import select
 import socket
 import time
@@ -115,14 +117,87 @@ class FakeController:
         return fields
 
 
+class FakeDeadband:
+    """Same phases as DeadbandTest_c with a made up wheel, one step per 10 ms."""
+    STILL_MS, START_PWM, COAST_MS = 300, {"L": 29, "R": 24}, 150
+
+    def __init__(self, command):
+        args = command.split()[2:]
+        defaults = ["L", "1", "0", "60", "5", "3", "1500", "1500"]
+        args = args + defaults[len(args):]
+        self.wheel = args[0].upper()
+        self.dir, self.lo, self.hi, self.pwm_step, self.repeats, self.rest_ms, self.run_ms = (int(a) for a in args[1:8])
+        self.trial, self.repeat, self.level = 0, 1, self.lo
+        self.count = {"L": 0, "R": 0}
+        self.moving, self.coast_until, self.last_move, self.t = False, 0, 0, 0
+        self.rows = 0
+        self.trials = self.repeats * ((self.hi - self.lo) // self.pwm_step + 1)
+        self.begin_rest()
+
+    def begin_rest(self):
+        self.trial += 1
+        self.phase, self.phase_start, self.rest_ok = "rest", self.t, 0
+
+    def header(self, t_ms):
+        self.t = self.phase_start = self.last_move = t_ms
+        return [f"#BH deadband wheel={self.wheel} dir={self.dir} min={self.lo} max={self.hi} step={self.pwm_step} "
+                f"repeats={self.repeats} rest_ms={self.rest_ms} run_ms={self.run_ms} still_ms={self.STILL_MS} "
+                f"trials={self.trials}",
+                "#BC trial,repeat,phase,wheel,pwm,t_ms,enc_us,enc_ok,enc_l,enc_r,rest_ok"]
+
+    def step(self):
+        self.t += 10
+        if self.phase == "rest":
+            resting = self.t - self.phase_start
+            still = self.t - self.last_move >= self.STILL_MS
+            if resting >= self.rest_ms and (still or resting >= self.rest_ms + 3000):
+                self.phase, self.phase_start, self.rest_ok = "run", self.t, int(still)
+                threshold = self.START_PWM[self.wheel]
+                self.moving = random.random() < min(1, max(0, (self.level - threshold + 3) / 6))
+        elif self.t - self.phase_start >= self.run_ms:
+            self.level += self.pwm_step
+            if self.level > self.hi:
+                self.level, self.repeat = self.lo, self.repeat + 1
+                if self.repeat > self.repeats:
+                    return f"#BE deadband done rows={self.rows} trials={self.trial}"
+            self.coast_until = self.t + self.COAST_MS
+            self.begin_rest()
+        pwm = self.dir * self.level if self.phase == "run" else 0
+        delta = 0.0
+        if self.phase == "run" and self.moving:
+            delta = (self.level - 12) * 0.13
+        elif self.t < self.coast_until:
+            delta = 1.0
+        if delta:
+            moved = int(delta + random.random())
+            if moved:
+                self.count[self.wheel] += self.dir * moved
+                self.last_move = self.t
+        self.rows += 1
+        return (f"#B,{self.trial},{self.repeat},{self.phase},{self.wheel},{pwm},{self.t},{self.t * 1000 + 3000},1,"
+                f"{self.count['L']},{self.count['R']},{self.rest_ok if self.phase == 'run' else 0}")
+
+
 def serve(conn, records):
     """Streams records to one client and handles its commands until it leaves."""
     controller = FakeController()
     start = time.monotonic()
     buffer = b""
     last_command = None
+    test = None
     i = 0
     while True:
+        if test is not None:
+            lines = []
+            while test is not None and test.t + 10 <= int((time.monotonic() - start) * 1000):
+                line = test.step()
+                lines.append(line)
+                if line.startswith("#BE"):
+                    test = None
+            try:
+                conn.sendall("".join(l + "\n" for l in lines).encode())
+            except OSError:
+                return
         if controller.check_timeout():
             print(f"no pwm for {MANUAL_TIMEOUT_MS} ms -> motors stopped")
             last_command = None
@@ -136,7 +211,10 @@ def serve(conn, records):
 
         readable, _, _ = select.select([conn], [], [], TELEMETRY_INTERVAL_MS / 1000)
         if readable:
-            data = conn.recv(4096)
+            try:
+                data = conn.recv(4096)
+            except OSError:
+                return
             if not data:
                 return
             buffer += data
@@ -144,6 +222,15 @@ def serve(conn, records):
             for line in lines:
                 command = line.decode("utf-8", errors="replace").strip()
                 parts = command.split()
+                if parts[:2] == ["test", "deadband"]:
+                    test = FakeDeadband(command)
+                    t_ms = int((time.monotonic() - start) * 1000)
+                    conn.sendall(("\n".join(test.header(t_ms)) + "\n").encode())
+                    print(f"robot got {command!r} -> simulated deadband test, {test.trials} trials")
+                    continue
+                if command == "stop" and test is not None:
+                    conn.sendall(b"#BE deadband stop rows=0 trials=0\n")
+                    test = None
                 if len(parts) == 2 and parts[0] == "ping" and parts[1].isdigit():
                     t_ms = int((time.monotonic() - start) * 1000)
                     try:

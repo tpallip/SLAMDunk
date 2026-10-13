@@ -1,0 +1,7 @@
+pwm,trials,sustained,twitch,none,sustained_rate,speed_median_mm_s,first_count_median_ms,first_count_max_ms,excluded_not_still
+25,10,0,0,10,0.0,,,,0
+26,10,0,0,10,0.0,,,,0
+27,10,0,1,9,0.0,,,,0
+28,10,0,0,10,0.0,,,,0
+29,10,0,0,10,0.0,,,,0
+30,10,0,0,10,0.0,,,,0

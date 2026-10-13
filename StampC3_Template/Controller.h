@@ -7,6 +7,7 @@
 #include "OdometryModel.h"
 #include "WheelSpeedController.h"
 #include "MoveController.h"
+#include "DeadbandTest.h"
 
 /**
  * @brief Supplies the nominal line-following controller for the StampC3 example.
@@ -62,8 +63,8 @@ class Controller_c {
      * Above the feedforward offsets because a motor needs more to start than to
      * keep turning (logs/run_20261011_172405.csv: left starts at 25-30, right
      * 22-25). Zero turns the kick off. */
-    static constexpr float LEFT_BREAKAWAY_PWM = 30.0f;
-    static constexpr float RIGHT_BREAKAWAY_PWM = 24.0f;
+    static constexpr float LEFT_BREAKAWAY_PWM = 40.0f;
+    static constexpr float RIGHT_BREAKAWAY_PWM = 42.0f;
     /** @brief Lowest PWM while a wheel is meant to be turning: about what keeps
      * it turning once moving (logs/speedtest_v1.csv, on a stand: below ~13 left
      * and ~9 right the wheels stall). Stops the PI pulling a wheel that has just
@@ -97,6 +98,8 @@ class Controller_c {
     WheelSpeedController_c right_speed;
     /** @brief Drives a set distance for the "move" command, through the speed controllers. */
     MoveController_c mover;
+    /** @brief "test deadband" command. */
+    DeadbandTest_c deadband;
 
     /** @brief Creates a controller in its waiting state. */
     Controller_c();
@@ -145,7 +148,8 @@ class Controller_c {
 
     enum UsrMode {
       MANUAL_CTRL,
-      AUTO
+      AUTO,
+      MOTOR_TEST
     };
 
     /** @brief Where a command came from; replies go back the same way. */
@@ -168,6 +172,10 @@ class Controller_c {
     unsigned long manual_cmd_ms = 0;   // time of the last "pwm" or "vel" command
     bool manual_vel = false;           // true: "vel" speed control; false: raw "pwm"
     unsigned long last_manual_ms = 0;  // previous manual-mode cycle, for the PI's dt
+    CmdSource test_source = FROM_WIFI;
+    unsigned long test_rows = 0;
+    unsigned long enc_us = 0;          // micros() at the last encoder read
+    bool enc_ok = false;
     TaskTimer_c update_timer;
     TaskTimer_c telemetry_timer;
     unsigned long recovery_start_ms;
@@ -177,6 +185,13 @@ class Controller_c {
 
     /** @brief Clears manual PWM and speed targets, without sending a motor command. */
     void clearManual();
+
+    void startDeadbandTest(Robot_c &robot, RobotWifiAP_c &server, const char *cmd,
+                           CmdSource source, unsigned long now);
+
+    void runMotorTest(Robot_c &robot, RobotWifiAP_c &server, unsigned long now);
+
+    void endMotorTest(Robot_c &robot, RobotWifiAP_c &server, unsigned long now, const char *why);
 
     /** @brief Applies the nominal controller behaviour for the current mode. */
     void runLineFollower(Robot_c &robot, unsigned long now);
@@ -217,7 +232,9 @@ class Controller_c {
      * "move <mm>" drives that far straight (negative: backwards) in manual
      * mode, then stops; any other motion command or "stop" cancels it.
      * "ping <id>" replies "#P <id> <t_ms>" at once, for measuring the round
-     * trip. Unknown commands get "#E unknown command: ..." and are ignored.
+     * trip. "test deadband <L|R> [dir min max step repeats rest_ms run_ms]"
+     * runs the deadband test; "stop" or the button ends it. Unknown commands
+     * get "#E unknown command: ..." and are ignored.
      */
     void handleCommand(Robot_c &robot, RobotWifiAP_c &server, const char *cmd,
                        CmdSource source, unsigned long now);

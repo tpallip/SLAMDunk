@@ -72,6 +72,10 @@ HELP = """\
 [b]Measuring[/b]
   zero             restart the "since zero" encoder counts
   ping [n] [ms]    round-trip test: n pings, one every ms (default 200, 20)
+  test deadband <L|R> [dir min max step repeats rest_ms run_ms]
+                   on-robot deadband test (defaults 1 0 60 5 3 1500 1500);
+                   the logger saves its rows to logs/bench_deadband_<time>.csv;
+                   stop, the StampC3 button or quit ends it early
 [b]Other[/b]
   help, clear, quit (or q, Ctrl+C: stops the motors first)
   anything else is sent to the robot as typed, e.g. manual, auto, start,
@@ -258,6 +262,7 @@ class MotorTui(App):
         self.ping_run = None
         self.lost_live = 0
         self.closed = False
+        self.test = None
         # Lines from the reader thread, with their arrival time. The reader never
         # waits for the UI, so a busy screen can't delay (and inflate) a ping's
         # arrival time.
@@ -308,7 +313,17 @@ class MotorTui(App):
         text = line.decode("utf-8", errors="replace")
         if text.startswith("#P"):
             self.on_pong(text, received_at)
+        elif text.startswith("#B,"):
+            self.on_test_row(text)
+        elif text.startswith("#BC"):
+            pass
         elif text.startswith("#"):
+            if text.startswith("#BH"):
+                self.test = {"name": text.split()[1] if len(text.split()) > 1 else "test",
+                             "trials": next((kv.split("=")[1] for kv in text.split() if kv.startswith("trials=")), "?"),
+                             "rows": 0, "row": None}
+            elif text.startswith("#BE"):
+                self.test = None
             self.say(f"[cyan]robot[/cyan] {escape(text)}")
         elif not self.on_record(text):
             self.bad_lines += 1
@@ -356,6 +371,12 @@ class MotorTui(App):
             if pwm != 0 and previous is not None:
                 wheel.unchanged.append(wheel.count == previous)
         return True
+
+    def on_test_row(self, text):
+        if self.test is None:
+            return
+        self.test["rows"] += 1
+        self.test["row"] = text[3:].split(",")
 
     def on_pong(self, text, received_at):
         parts = text.split()
@@ -537,7 +558,7 @@ class MotorTui(App):
                 if len(command) > MAX_COMMAND_LEN:
                     self.say(f"too long ({len(command)} chars); the robot keeps {MAX_COMMAND_LEN}")
                     return
-                if word in ("vel", "move", "manual"):
+                if word in ("vel", "move", "manual", "test"):
                     self.manual_sent = True
                     self.left.requested = self.right.requested = 0   # the robot drives now
                 elif word == "auto":
@@ -587,6 +608,11 @@ class MotorTui(App):
         lines.append(f"lost pings  {self.lost_live}")
         if self.ping_run is not None:
             lines.append(f"[b]ping test[/b]   {self.ping_run.sent}/{self.ping_run.count} sent")
+        if self.test is not None:
+            row = self.test["row"]
+            where = (f"trial {row[0]}/{self.test['trials']} sweep {row[1]} {row[2]} {row[3]} pwm {row[4]}"
+                     if row and len(row) > 4 else "starting")
+            lines.append(f"[b]test {escape(self.test['name'])}[/b] {escape(where)}, {self.test['rows']} rows")
         return "\n".join(lines)
 
 

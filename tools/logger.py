@@ -7,6 +7,7 @@ import socket
 import logging
 import time
 import errno
+import json
 from rich.table import Table
 from rich.live import Live
 from rich.logging import RichHandler
@@ -170,6 +171,54 @@ def log_surface_frame():
         colors=[[255, 80, 80]],
         labels=[f"line threshold {LINE_THRESHOLD}"],
     ), static=True)
+
+
+class BenchRecorder:
+    """Writes each on-robot test (#BH, #BC, #B rows, #BE) to logs/bench_<test>_<time>.csv + .json"""
+
+    def __init__(self, log_dir):
+        self.log_dir = log_dir
+        self.file = None
+        self.meta = None
+        self.rows = 0
+
+    def handle(self, line):
+        if line.startswith(b"#B,"):
+            if self.file is not None:
+                self.file.write(line[3:].decode("utf-8", errors="replace") + "\n")
+                self.rows += 1
+            return True
+        text = line.decode("utf-8", errors="replace")
+        if line.startswith(b"#BH "):
+            self.close("no #BE: a new test started")
+            parts = text.split()
+            test = parts[1] if len(parts) > 1 else "test"
+            stem = f"bench_{test}_{datetime.now():%Y%m%d_%H%M%S}"
+            self.log_dir.mkdir(exist_ok=True)
+            self.path = self.log_dir / f"{stem}.csv"
+            self.meta = {"test": test, "header": text, "started": datetime.now().isoformat(timespec="seconds"),
+                         "params": dict(p.split("=", 1) for p in parts[2:] if "=" in p)}
+            self.file = open(self.path, "w", buffering=1)
+            self.rows = 0
+            log.info("test %s started: saving rows to %s", test, self.path)
+            return True
+        if line.startswith(b"#BC "):
+            if self.file is not None:
+                self.file.write(text[4:] + "\n")
+            return True
+        if line.startswith(b"#BE"):
+            self.close(text)
+            return True
+        return False
+
+    def close(self, end):
+        if self.file is None:
+            return
+        self.file.close()
+        self.meta.update(ended=datetime.now().isoformat(timespec="seconds"), end=end, rows_saved=self.rows)
+        self.path.with_suffix(".json").write_text(json.dumps(self.meta, indent=2) + "\n")
+        log.info("test saved: %s (%d rows; %s)", self.path, self.rows, end)
+        self.file = None
 
 
 class TeleopServer:
@@ -359,6 +408,7 @@ def main():
     latest = None
     csv_writer = None
     teleop = None
+    bench = BenchRecorder(LOG_DIR)
 
     if args.teleop:
         try:
@@ -442,7 +492,7 @@ def main():
                     # A reply to a command, not a telemetry record.
                     if teleop is not None:
                         teleop.robot_reply(line, received_at)
-                    if not line.startswith(b"#P"):
+                    if not bench.handle(line) and not line.startswith(b"#P"):
                         log.info("robot: %s", line.decode("utf-8", errors="replace"))
                     continue
                 text = line.decode("utf-8", errors="replace")
@@ -464,6 +514,7 @@ def main():
         log.warning("discarding incomplete last line: %r", buffer)
 
     sock.close()
+    bench.close("logger stopped before #BE")
     if teleop is not None:
         teleop.close()
     if csv_writer is not None:

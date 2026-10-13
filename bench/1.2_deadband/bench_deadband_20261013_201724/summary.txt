@@ -1,0 +1,17 @@
+deadband R dir -1 (bench_deadband_20261013_201724.csv)
+end: #BE deadband done rows=17994 trials=60
+rule: sustained = >= 1 count in every 100 ms of the last 500 ms; twitch = moved >= 3 counts otherwise
+trials with a run: 60; not started from rest (excluded): 0
+
+ PWM  trials  sustained  twitch  none   rate   speed mm/s   first count ms (median/max)
+ -35      10          4       0     6    40%        113.7   109.5 / 150.0
+ -36      10          3       0     7    30%        117.8   90.0 / 110.0
+ -37      10         10       0     0   100%        122.3   340.0 / 511.3
+ -38      10         10       0     0   100%        125.9   85.0 / 230.7
+ -39      10         10       0     0   100%        129.2   129.9 / 190.7
+ -40      10         10       0     0   100%        132.6   79.9 / 180.1
+
+never started at or below: - (moved at the lowest level)
+always started at or above: 37
+50 % starting point (interpolated): 36.3
+plot skipped (ImportError: Matplotlib requires numpy>=1.23; you have 1.21.5)

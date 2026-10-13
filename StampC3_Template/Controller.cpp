@@ -99,7 +99,11 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
 
   // Ask the robot for the latest encoder information, and then use this
   // to update the odometry on board the StampC3 (see OdometryModel.h).
-  if (robot.getEncoders()) {
+  // timestamp the middle of the read for the bench tests
+  unsigned long enc_start_us = micros();
+  enc_ok = robot.getEncoders();
+  enc_us = enc_start_us + (micros() - enc_start_us) / 2;
+  if (enc_ok) {
     odometry.update(robot.getLeftEncoderCount(), robot.getRightEncoderCount());
 
     // Wheel speeds for the "vel" command, using the odometry's wheel geometry.
@@ -130,6 +134,9 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
       runLineFollower(robot, now);
 
     }
+  }
+  else if(usr_mode == MOTOR_TEST) {
+    runMotorTest(robot, server, now);
   }
   else if(usr_mode == MANUAL_CTRL) {
     // Stop if the client has gone, or (when enabled) if "pwm"/"vel" commands
@@ -187,6 +194,82 @@ void Controller_c::clearManual() {
   left_speed.reset();
   right_speed.reset();
   mover.cancel();
+}
+
+void Controller_c::startDeadbandTest(Robot_c &robot, RobotWifiAP_c &server, const char *cmd,
+                                     CmdSource source, unsigned long now) {
+  DeadbandTest_c::Params p;
+  int rest_ms = (int)p.rest_ms, run_ms = (int)p.run_ms;
+  if(sscanf(cmd, "test deadband %c %d %d %d %d %d %d %d", &p.wheel, &p.dir, &p.pwm_min,
+            &p.pwm_max, &p.pwm_step, &p.repeats, &rest_ms, &run_ms) < 1) {
+    reply(server, source, "#E usage: test deadband <L|R> [dir min max step repeats rest_ms run_ms]\n");
+    return;
+  }
+  p.rest_ms = rest_ms < 0 ? 0 : rest_ms;
+  p.run_ms = run_ms < 0 ? 0 : run_ms;
+  int32_t count = p.wheel == 'L' ? robot.getLeftEncoderCount() : robot.getRightEncoderCount();
+  const char *problem = deadband.start(p, now, count);
+  if(problem != nullptr) {
+    reply(server, source, "#E test deadband: %s\n", problem);
+    return;
+  }
+
+  setSignal(0);
+  clearManual();
+  robot.setMotorPWM(0, 0);
+  usr_mode = MOTOR_TEST;
+  test_source = source;
+  test_rows = 0;
+  reply(server, source, "#BH deadband wheel=%c dir=%d min=%d max=%d step=%d repeats=%d "
+        "rest_ms=%lu run_ms=%lu still_ms=%lu trials=%d\n",
+        p.wheel, p.dir, p.pwm_min, p.pwm_max, p.pwm_step, p.repeats, p.rest_ms, p.run_ms,
+        DeadbandTest_c::STILL_MS, p.repeats * deadband.levelsPerSweep());
+  reply(server, source, "#BC trial,repeat,phase,wheel,pwm,t_ms,enc_us,enc_ok,enc_l,enc_r,rest_ok\n");
+}
+
+void Controller_c::runMotorTest(Robot_c &robot, RobotWifiAP_c &server, unsigned long now) {
+  // stop if nobody is listening, or on the button
+  if(test_source == FROM_WIFI && !server.clientConnected()) {
+    endMotorTest(robot, server, now, "link lost");
+    return;
+  }
+  if(robot.isButtonPressed()) {
+    endMotorTest(robot, server, now, "button");
+    return;
+  }
+
+  const DeadbandTest_c::Params &p = deadband.getParams();
+  int32_t count = p.wheel == 'L' ? robot.getLeftEncoderCount() : robot.getRightEncoderCount();
+  deadband.update(now, count);
+  if(!deadband.active()) {
+    endMotorTest(robot, server, now, "done");
+    return;
+  }
+
+  int pwm = deadband.getPwm();
+  robot.setMotorPWM(p.wheel == 'L' ? pwm : 0, p.wheel == 'R' ? pwm : 0);
+  bool running = deadband.getPhase() == DeadbandTest_c::RUN;
+  reply(server, test_source, "#B,%d,%d,%s,%c,%d,%lu,%lu,%d,%ld,%ld,%d\n",
+        deadband.getTrial(), deadband.getRepeat(), running ? "run" : "rest", p.wheel, pwm,
+        now, enc_us, enc_ok ? 1 : 0, (long)robot.getLeftEncoderCount(),
+        (long)robot.getRightEncoderCount(), running && deadband.getRestOk() ? 1 : 0);
+  test_rows++;
+}
+
+void Controller_c::endMotorTest(Robot_c &robot, RobotWifiAP_c &server, unsigned long now,
+                                const char *why) {
+  if(deadband.active()) {
+    deadband.abort();
+  }
+  robot.setMotorPWM(0, 0);
+  reply(server, test_source, "#BE deadband %s rows=%lu trials=%d\n", why, test_rows,
+        deadband.getTrial());
+  usr_mode = MANUAL_CTRL;
+  manual_vel = false;
+  clearManual();
+  manual_source = test_source;
+  manual_cmd_ms = now;
+  last_manual_ms = now;
 }
 
 void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
@@ -322,7 +405,7 @@ int Controller_c::readSerial() {
 }
 
 void Controller_c::reply(RobotWifiAP_c &server, CmdSource to, const char *format, ...) {
-  char buffer[128];
+  char buffer[192];
   va_list args;
   va_start(args, format);
   vsnprintf(buffer, sizeof(buffer), format, args);
@@ -339,6 +422,22 @@ void Controller_c::handleCommand(Robot_c &robot, RobotWifiAP_c &server, const ch
                                  CmdSource source, unsigned long now) {
   float left, right;
   unsigned long ping_id;
+
+  // don't let other motion commands fight a running test
+  if(usr_mode == MOTOR_TEST) {
+    if(strcmp(cmd, "stop") == 0 || strcmp(cmd, "manual") == 0 || strcmp(cmd, "auto") == 0) {
+      endMotorTest(robot, server, now, cmd);
+      if(strcmp(cmd, "auto") == 0) {
+        setSignal(0);
+      }
+      return;
+    }
+    if(strncmp(cmd, "pwm ", 4) == 0 || strncmp(cmd, "vel ", 4) == 0 ||
+       strncmp(cmd, "move ", 5) == 0 || strncmp(cmd, "test ", 5) == 0 || strcmp(cmd, "start") == 0) {
+      reply(server, source, "#E a test is running; send stop first\n");
+      return;
+    }
+  }
 
   if(strcmp(cmd, "auto") == 0) {
     // reset() returns to waiting in AUTO; start with the button or "start".
@@ -401,6 +500,9 @@ void Controller_c::handleCommand(Robot_c &robot, RobotWifiAP_c &server, const ch
       manual_cmd_ms = now;
       manual_source = source;
     }
+  }
+  else if(strncmp(cmd, "test deadband", 13) == 0) {
+    startDeadbandTest(robot, server, cmd, source, now);
   }
   else if(sscanf(cmd, "ping %lu", &ping_id) == 1) {
     // Answered in the same cycle, so the round trip includes the wait for the

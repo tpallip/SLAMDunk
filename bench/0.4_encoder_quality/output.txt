@@ -1,0 +1,65 @@
+46454 records, 471 s. Cycle gaps: 10 ms 96.0%, 11-19 ms 3.8%, >= 20 ms 0.19%, max 54 ms
+
+Stretches (PWM L/R: counts moved L/R)
+     39.6-  109.6 s  PWM   +0/  +0:    +69 /     +0
+    109.6-  117.5 s  PWM  +25/  +0:     +0 /     +0
+    117.5-  128.3 s  PWM  +25/ +25:     +0 /  +2914
+    128.3-  134.2 s  PWM   +0/  +0:     +0 /    +15
+    134.2-  139.0 s  PWM  +25/  +0:     +0 /     +0
+    139.0-  141.9 s  PWM  +30/  +0:   +658 /     +0
+    141.9-  162.2 s  PWM  +30/ +30:  +5023 /  +6730
+    162.2-  480.0 s  PWM   +0/  +0:  +3646 /  +7171
+    480.1-  486.2 s  PWM  +20/ +20:     +0 /     +0
+    486.2-  489.3 s  PWM   +0/  +0:     +0 /     +0
+    489.3-  495.4 s  PWM  +40/ +40:  +2119 /  +2858
+    495.4-  498.0 s  PWM   +0/  +0:    +24 /    +31
+    498.0-  502.5 s  PWM  +80/ +80:  +3702 /  +4380
+    502.5-  510.8 s  PWM   +0/  +0:    +98 /   +109
+
+Hand turns (motors off)
+  left     83.5-   94.0 s:    +69 counts = +0.193 rev
+  left    186.2-  191.2 s:    +64 counts = +0.179 rev
+  left    235.6-  244.7 s:   +357 counts = +0.996 rev
+  left    249.2-  252.4 s:   +359 counts = +1.002 rev
+  left    254.4-  274.4 s:  +2861 counts = +7.985 rev
+  right   311.0-  335.3 s:  +3224 counts = +8.998 rev
+  right   337.9-  341.0 s:   +363 counts = +1.013 rev
+  right   365.9-  387.4 s:  +2512 counts = +7.011 rev
+  right   388.9-  397.3 s:  +1077 counts = +3.006 rev
+  right   495.4-  495.5 s:    +31 counts = +0.087 rev
+  left    502.5-  502.7 s:    +98 counts = +0.274 rev
+  right   502.5-  502.7 s:   +109 counts = +0.304 rev
+
+Freshness at constant PWM (first 1 s of each stretch skipped)
+  PWM +25/+0 L: not moving
+  PWM +25/+0 R: not moving
+  PWM +25/+25 L: not moving
+  PWM +25/+25 R:  76.7 mm/s, 2.73 counts/cycle, repeated reads 0.0%, on-time residual max 1.7 (>1.5 counts 0.3%)
+      changes per record 1:3 2:263 3:655 4:33 5:7
+      speed sd: 10 ms 14.0 mm/s (18.3 %), 20 ms 7.6 mm/s (9.9 %), 50 ms 3.1 mm/s (4.0 %), 100 ms 1.8 mm/s (2.4 %)
+  PWM +25/+0 L: not moving
+  PWM +25/+0 R: not moving
+  PWM +30/+0 L:  70.9 mm/s, 2.53 counts/cycle, repeated reads 0.0%, on-time residual max 0.5 (>1.5 counts 0.0%)
+      changes per record 2:85 3:99 5:2
+      speed sd: 10 ms 14.5 mm/s (20.5 %), 20 ms 6.1 mm/s (8.6 %), 50 ms 3.5 mm/s (5.0 %), 100 ms 1.2 mm/s (1.6 %)
+  PWM +30/+0 R: not moving
+  PWM +30/+30 L:  69.6 mm/s, 2.48 counts/cycle, repeated reads 0.0%, on-time residual max 1.5 (>1.5 counts 0.8%)
+      changes per record 1:14 2:922 3:909 4:40 5:5
+      speed sd: 10 ms 14.9 mm/s (21.3 %), 20 ms 5.9 mm/s (8.4 %), 50 ms 3.0 mm/s (4.3 %), 100 ms 1.5 mm/s (2.2 %)
+  PWM +30/+30 R:  93.9 mm/s, 3.35 counts/cycle, repeated reads 0.0%, on-time residual max 2.3 (>1.5 counts 1.3%)
+      changes per record 2:37 3:1128 4:659 5:53 6:10 7:2
+      speed sd: 10 ms 15.4 mm/s (16.4 %), 20 ms 8.0 mm/s (8.5 %), 50 ms 3.2 mm/s (3.4 %), 100 ms 1.9 mm/s (2.0 %)
+  PWM +20/+20 L: not moving
+  PWM +20/+20 R: not moving
+  PWM +40/+40 L: 101.5 mm/s, 3.62 counts/cycle, repeated reads 0.0%, on-time residual max 1.6 (>1.5 counts 1.5%)
+      changes per record 2:8 3:177 4:293 5:13 6:5 7:2
+      speed sd: 10 ms 15.8 mm/s (15.5 %), 20 ms 7.8 mm/s (7.7 %), 50 ms 3.9 mm/s (3.9 %), 100 ms 1.9 mm/s (1.9 %)
+  PWM +40/+40 R: 134.5 mm/s, 4.79 counts/cycle, repeated reads 0.0%, on-time residual max 2.8 (>1.5 counts 2.9%)
+      changes per record 2:2 3:8 4:107 5:342 6:25 7:8 8:3 9:3
+      speed sd: 10 ms 17.6 mm/s (13.1 %), 20 ms 10.1 mm/s (7.5 %), 50 ms 4.6 mm/s (3.5 %), 100 ms 2.5 mm/s (1.8 %)
+  PWM +80/+80 L: 243.6 mm/s, 8.68 counts/cycle, repeated reads 0.0%, on-time residual max 5.3 (>1.5 counts 8.3%)
+      changes per record 5:2 6:7 7:7 8:100 9:189 10:11 11:7 12:5 13:3 14:2 15:2
+      speed sd: 10 ms 27.4 mm/s (11.2 %), 20 ms 15.2 mm/s (6.2 %), 50 ms 4.3 mm/s (1.8 %), 100 ms 2.7 mm/s (1.1 %)
+  PWM +80/+80 R: 287.1 mm/s, 10.23 counts/cycle, repeated reads 0.0%, on-time residual max 5.8 (>1.5 counts 9.2%)
+      changes per record 6:2 7:6 8:4 9:14 10:209 11:74 12:9 13:4 14:7 16:3 18:2
+      speed sd: 10 ms 30.2 mm/s (10.5 %), 20 ms 17.1 mm/s (6.0 %), 50 ms 4.2 mm/s (1.5 %), 100 ms 2.7 mm/s (1.0 %)

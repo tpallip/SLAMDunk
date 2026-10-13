@@ -307,7 +307,8 @@ after `Ctrl+C`. Skipped lines (wrong field count, not a number) are not saved.
 | `connection ended: Closed by the server.` | The other side closed the connection normally. |
 | `expected 14 fields, got N` / `not a number` | A line that isn't a telemetry record was received and skipped. |
 | `discarding incomplete last line` | The connection ended partway through a line. |
-| `robot: #...` | A reply from the robot (see "Robot replies"). `#P` ping answers aren't printed. |
+| `robot: #...` | A reply from the robot (see "Robot replies"). `#P` ping answers and test rows aren't printed. |
+| `test <name> started: ...` / `test saved: ...` | An on-robot test started / finished. |
 
 ### Test without the robot
 
@@ -487,11 +488,44 @@ Lines from the robot that start with `#` are replies, not telemetry. The
 | `#P <id> <t_ms>` | Answer to `ping <id>`; `t_ms` is the robot's cycle time. Through the logger a third number is added: the logger's leg in microseconds. |
 | `#E unknown command: ...` | The robot didn't understand a command. |
 | `#I move done: ...` | A `move` finished (or timed out), with how far each wheel ended from its target. |
+| `#BH`, `#BC`, `#B,...`, `#BE` | On-robot test: header, columns, data rows, end. |
 
 Replies go back the way the command came: over WiFi or over USB. The robot
 takes commands from both. A wheel driven over USB stops only by the 500 ms
 command timeout, since the robot can't tell whether anyone is listening on
 the cable.
+
+### On-robot motor tests
+
+These run on the robot itself so the timing doesn't depend on WiFi. While a
+test runs it has the motors and sends a `#B` row every 10 ms. The logger
+saves each test to `logs/bench_<test>_<time>.csv`, plus a `.json` with the
+parameters and how it ended.
+
+`stop`, the button, or dropping the connection ends a test early. `pwm`,
+`vel`, `move`, `start` and another `test` are refused while one is running.
+
+#### Deadband test
+
+```
+test deadband <L|R> [dir min max step repeats rest_ms run_ms]
+```
+
+Defaults are `1 0 60 5 3 1500 1500`. For each level the wheel waits until
+it's been still for 300 ms, then runs at that PWM for `run_ms`. The sweep goes
+from `min` to `max` and repeats `repeats` times. Max is 100.
+
+e.g. `test deadband L -1 15 40 1 10`
+
+Columns: `trial, repeat, phase, wheel, pwm, t_ms, enc_us, enc_ok, enc_l,
+enc_r, rest_ok`. `enc_us` is when the encoders were read.
+
+```bash
+python3 bench/1.2_deadband/analyse.py logs/bench_deadband_<time>.csv
+```
+
+Results go in `bench/1.2_deadband/<csv name>/`. `tools/fake_robot.py` can
+fake this test if you want to try it without the robot.
 
 ### Wheel speed control (`vel`)
 
