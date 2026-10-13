@@ -307,6 +307,7 @@ after `Ctrl+C`. Skipped lines (wrong field count, not a number) are not saved.
 | `connection ended: Closed by the server.` | The other side closed the connection normally. |
 | `expected 14 fields, got N` / `not a number` | A line that isn't a telemetry record was received and skipped. |
 | `discarding incomplete last line` | The connection ended partway through a line. |
+| `robot: #...` | A reply from the robot (see "Robot replies"). `#P` ping answers aren't printed. |
 
 ### Test without the robot
 
@@ -314,7 +315,8 @@ after `Ctrl+C`. Skipped lines (wrong field count, not a number) are not saved.
 CSV saved by the logger as live telemetry (every 50 ms, on a loop) and prints
 every command it receives. Commands change the replayed data the way the
 firmware would (`manual` + `pwm 40 40` shows up in the pwm columns, `start`
-sets `signal`), so you can test the logger and the teleop end to end. No
+sets `signal`, `ping` is answered), so you can test the logger, the teleop and
+the motor TUI end to end. No
 robot or robot WiFi is needed.
 
 1. Terminal 1, the fake robot (any CSV from `logs/` works):
@@ -368,8 +370,8 @@ python tools/teleop.py
   PWM to start and is slower), so equal `pwm` values make the robot curve.
   `vel` closes the loop on each wheel's encoder; see "Wheel speed control".
 - `move <mm>` drives a set distance (up to 500 mm) on the encoders, through
-  the speed loop, and stops by itself; Serial prints how far each wheel ended
-  from its target. It slows down near the end and stops each wheel early by
+  the speed loop, and stops by itself; the robot replies with how far each
+  wheel ended from its target (`#I move done: ...`, printed by the logger). It slows down near the end and stops each wheel early by
   the distance it coasts (`MOVE_STOP_LEAD_S`): if steps overshoot on your
   robot, raise it; if they stop short, lower it. Any other motion command or
   `stop` cancels a move.
@@ -381,8 +383,115 @@ python tools/teleop.py
 - When the teleop exits or disconnects, the logger sends `stop`. This also
   stops a line-follower run started from the teleop.
 - One teleop at a time; a second one is told the logger is busy.
+- The robot answers some commands with a line starting with `#` (see
+  "Robot replies" below); the logger prints them and passes them on to the
+  teleop.
 - `--no-teleop` runs the logger without the teleop port. The port is set by
   `TELEOP_PORT` in `tools/logger.py` (and `PORT` in `tools/teleop.py`).
+
+### Motor TUI (`tools/motor_tui.py`)
+
+A terminal screen for driving each motor on its own and watching what it does:
+type a PWM per wheel, see the PWM the robot reports, the encoder counts and
+each wheel's speed, plus every reply from the robot. It also measures the
+command round trip (see "Measuring latency").
+
+It needs two more packages in the virtual environment:
+
+```bash
+pip install textual pyserial
+```
+
+It can reach the robot three ways:
+
+```bash
+python tools/motor_tui.py                        # through the logger (start logger.py first)
+python tools/motor_tui.py --direct               # straight to the robot over WiFi (logger not running)
+python tools/motor_tui.py --serial /dev/ttyACM0  # over the USB cable (Windows: --serial COM3)
+```
+
+- **Through the logger** (default): the logger keeps recording its CSV and
+  Rerun, and passes the telemetry and the robot's replies on to the TUI.
+- **Direct**: the robot takes one TCP client, so the logger can't run at the
+  same time. Nothing is recorded except the latency CSVs.
+- **USB**: commands and replies go over the USB cable; WiFi isn't needed.
+  Close the Arduino Serial Monitor first (only one program can hold the
+  port). On Linux the StampC3's USB chip (WCH CH9102, `1a86:55d4`) shows
+  up as `/dev/ttyACM0`; check with `ls /dev/serial/by-id/` after plugging
+  in. **Plug the cable in before switching the 3Pi+ on.** On our robot,
+  plugging it in while the 3Pi+ is already on leaves the laptop seeing
+  nothing (no port, no error). Switching the 3Pi+ on with the cable already
+  in is fine. To replug, switch the 3Pi+ off, replug, then switch it on.
+  If opening the port
+  resets the robot, wait for it to boot; the TUI keeps listening.
+
+Commands (type `help` in the TUI for the list):
+
+```
+l 40          # left wheel PWM 40; the right wheel keeps its value
+r -25         # right wheel PWM -25
+b 30          # both wheels 30
+spin 40       # left +40, right -40
+pwm 40 30     # both at once
+stop          # both to 0 (also: s, 0)
+zero          # restart the "since zero" encoder counts
+ping 200 20   # latency test: 200 pings, one every 20 ms
+vel 50 50     # anything else goes to the robot as typed (manual, auto, start, vel, move)
+quit          # stops the motors, then exits (also: q, Ctrl+C)
+```
+
+- The first motor command switches the robot to manual mode. A moving PWM is
+  resent every 0.2 s, so the robot's 500 ms safety stop doesn't trigger.
+- The robot clamps PWM to ±100 (`MANUAL_MAX_PWM`); the TUI warns above that,
+  and "robot PWM" shows what the robot actually used.
+- Wheel speed is the count change over the last 100 ms of robot time, in
+  counts/s and mm/s (16 mm wheels, 358.3 counts/rev). "No count change while
+  driven" is the share of recent records, with PWM non-zero, whose count
+  didn't change: high at low PWM means the wheel is stalled or the encoder
+  snapshot is stale.
+- The Link panel shows telemetry records per second, the largest gap
+  between records (robot clock, last 5 s), and a ping every 0.5 s.
+
+#### Measuring latency
+
+`ping N MS` in the TUI sends N `ping <id>` commands, one every MS ms. The
+robot answers each with `#P <id> <t_ms>` in its next controller cycle, so a
+round trip includes up to 10 ms of waiting for that cycle, like every real
+command. The TUI reports the median, p95, p99 and max, and saves every ping
+to `logs/latency_<link>_<time>.csv` (`id, sent_s, rtt_ms, robot_leg_ms,
+robot_t_ms, lost, pwm_left, pwm_right`).
+
+Through the logger, the logger also times its own leg (forwarding the ping
+to receiving the answer) and adds it to the answer. The TUI reports that as
+the "robot leg" (WiFi + robot) and the rest as the "logger share" (local
+sockets plus the logger's own work, such as the table and Rerun).
+
+To compare the three links, run the same test on each, with the robot in
+the same place and the motors in the same state:
+
+1. logger running, `python tools/motor_tui.py`, `ping 500 20`
+2. logger stopped, `python tools/motor_tui.py --direct`, `ping 500 20`
+3. USB cable, `python tools/motor_tui.py --serial /dev/ttyACM0`, `ping 500 20`
+
+Repeat with the motors running (`b 40` before the test) and, for WiFi, at a
+few distances. At 115200 baud, USB carries about 11.5 kB/s; the 100 Hz
+telemetry uses about 7 kB/s of that, so a ping answer can queue behind it.
+
+#### Robot replies
+
+Lines from the robot that start with `#` are replies, not telemetry. The
+14-column telemetry is unchanged.
+
+| Line | Meaning |
+|---|---|
+| `#P <id> <t_ms>` | Answer to `ping <id>`; `t_ms` is the robot's cycle time. Through the logger a third number is added: the logger's leg in microseconds. |
+| `#E unknown command: ...` | The robot didn't understand a command. |
+| `#I move done: ...` | A `move` finished (or timed out), with how far each wheel ended from its target. |
+
+Replies go back the way the command came: over WiFi or over USB. The robot
+takes commands from both. A wheel driven over USB stops only by the 500 ms
+command timeout, since the robot can't tell whether anyone is listening on
+the cable.
 
 ### Wheel speed control (`vel`)
 
@@ -535,6 +644,7 @@ the list of valid ones.
 | Problem | Fix |
 |---|---|
 | Arduino IDE can't see the repo folder | You're using the snap version. Install the AppImage (see above). |
+| No `/dev/ttyACM0` with the 3Pi+ switched on | The cable was plugged in after the 3Pi+ was switched on. Switch the 3Pi+ off, replug the cable, then switch it on. |
 | Serial Monitor is blank | Set **USB CDC On Boot → Disabled** and re-upload; check the baud rate is 115200. |
 | Upload fails or port not found | Add yourself to `dialout`; try Upload Speed 115200. |
 | Robot doesn't turn on | Press the 3Pi+ power button; check the cells' orientation and charge. |

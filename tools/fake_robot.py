@@ -5,7 +5,9 @@ prints each command it receives (repeats only once). Commands change the replaye
 the firmware would, so the logger shows them: "pwm" sets the pwm columns in
 manual mode ("vel" sets them to the firmware's feedforward PWM; there is no
 simulated speed loop), "start" sets signal, and manual mode stops after
-MANUAL_TIMEOUT_MS without a "pwm" or "vel" command. Run the logger with --host 127.0.0.1 --port 9000.
+MANUAL_TIMEOUT_MS without a "pwm" or "vel" command. "ping <id>" is answered
+with "#P <id> <t_ms>" and unknown commands with "#E ...", like the firmware.
+Run the logger with --host 127.0.0.1 --port 9000.
 """
 import argparse
 import select
@@ -141,8 +143,21 @@ def serve(conn, records):
             *lines, buffer = buffer.split(b"\n")
             for line in lines:
                 command = line.decode("utf-8", errors="replace").strip()
+                parts = command.split()
+                if len(parts) == 2 and parts[0] == "ping" and parts[1].isdigit():
+                    t_ms = int((time.monotonic() - start) * 1000)
+                    try:
+                        conn.sendall(f"#P {parts[1]} {t_ms}\n".encode())
+                    except OSError:
+                        return
+                    continue
                 if command:
                     result = controller.handle(command)
+                    if result == "unknown command":
+                        try:
+                            conn.sendall(f"#E unknown command: {command}\n".encode())
+                        except OSError:
+                            return
                     # The teleop resends pwm commands; print only changes.
                     if command != last_command:
                         print(f"robot got {command!r:<16} -> {result}")
@@ -163,6 +178,7 @@ def main():
             print("waiting for the logger...")
             conn, addr = server.accept()
             print(f"logger connected from {addr[0]}:{addr[1]}")
+            conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)   # like setNoDelay on the robot
             with conn:
                 serve(conn, records)
             print("logger disconnected")

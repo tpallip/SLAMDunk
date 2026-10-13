@@ -1,0 +1,8 @@
+run,link,motors,pings,lost,part,median,p95,p99,max,min
+latency_logger_20261013_180406.csv,WiFi via logger,off,500,0,round trip,10.49,16.87,21.83,36.75,3.90
+latency_logger_20261013_180406.csv,WiFi via logger,off,500,0,robot leg,9.61,15.69,19.36,25.07,3.39
+latency_logger_20261013_180406.csv,WiFi via logger,off,500,0,logger share,0.24,3.35,9.87,31.58,0.10
+latency_logger_20261013_180548.csv,WiFi via logger,40/40,500,0,round trip,9.68,15.92,25.82,52.17,3.66
+latency_logger_20261013_180548.csv,WiFi via logger,40/40,500,0,robot leg,9.32,14.83,23.37,51.88,3.50
+latency_logger_20261013_180548.csv,WiFi via logger,40/40,500,0,logger share,0.23,2.06,5.31,23.08,0.08
+latency_serial_20261013_182915.csv,USB serial,off,500,0,round trip,7.17,16.58,18.05,28.88,2.49

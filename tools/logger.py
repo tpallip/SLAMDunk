@@ -25,6 +25,7 @@ LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
 USE_TELEOP = True         # accept commands from tools/teleop.py (--teleop/--no-teleop)
 TELEOP_HOST = "127.0.0.1" # local only, so nobody else on the network can drive the robot
 TELEOP_PORT = 9100
+MAX_PENDING_PINGS = 1000  # forwarded pings still waiting for the robot's "#P" answer
 HEADING_ARROW_MM = 30     # length of the heading arrow drawn at the robot
 SURFACE_MAX = 2942        # highest surface reading (black, or robot lifted)
 LINE_THRESHOLD = 1400     # Controller_c::LINE_THRESHOLD, drawn on the profile
@@ -177,6 +178,16 @@ class TeleopServer:
     Accepts one teleop client at a time. Commands are forwarded only as complete
     lines, so a teleop that disconnects mid-command can't leave half a command
     on the robot's side to merge with the next one.
+
+    The robot's "#" reply lines are passed back to the client. Lines from the
+    client that start with "#" are for the logger, not the robot:
+    "#telemetry on" also passes back every telemetry record (tools/motor_tui.py
+    uses this), "#telemetry off" stops that.
+
+    "ping <id>" commands are timed: when the robot's "#P <id> <t_ms>" comes
+    back, the logger adds the microseconds between forwarding the ping and
+    receiving the answer, so the client can split its round trip into the
+    logger's share and the robot's (WiFi + controller cycle).
     """
 
     def __init__(self, host, port, robot):
@@ -186,6 +197,8 @@ class TeleopServer:
         self.client = None
         self.buffer = b""
         self.last_command = None   # last command forwarded, to log only changes
+        self.telemetry = False     # pass telemetry records back to the client
+        self.pings = {}            # ping id -> time.perf_counter() when forwarded
 
     def sockets(self):
         """Sockets to watch for incoming connections or commands."""
@@ -201,6 +214,7 @@ class TeleopServer:
             conn.close()
             log.warning("refused a second teleop from %s:%s", *addr)
             return
+        conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)   # replies go out at once
         self.client = conn
         self.buffer = b""
         conn.sendall(f"connected to logger, robot at {self.robot}\n".encode())
@@ -220,11 +234,49 @@ class TeleopServer:
         *lines, self.buffer = self.buffer.split(b"\n")
         return [line.strip() for line in lines if line.strip()]
 
+    def send(self, line):
+        """Passes one line back to the client; drops a client that can't take it."""
+        if self.client is None:
+            return
+        try:
+            self.client.sendall(line + b"\n")
+        except OSError:
+            log.warning("teleop stopped reading: disconnecting it")
+            self.drop_client()
+
+    def directive(self, line):
+        """Acts on a "#..." line from the client, meant for the logger."""
+        if line == b"#telemetry on":
+            self.telemetry = True
+        elif line == b"#telemetry off":
+            self.telemetry = False
+        else:
+            self.send(b"#E logger: unknown directive " + line)
+
+    def forwarded(self, command, sent_at):
+        """Notes the time a "ping <id>" left for the robot."""
+        parts = command.split()
+        if len(parts) == 2 and parts[0] == b"ping":
+            if len(self.pings) >= MAX_PENDING_PINGS:
+                self.pings.clear()   # lost answers; don't grow without bound
+            self.pings[parts[1]] = sent_at
+
+    def robot_reply(self, line, received_at):
+        """Passes a robot "#" line to the client, timing "#P" answers."""
+        parts = line.split()
+        if len(parts) == 3 and parts[0] == b"#P":
+            sent_at = self.pings.pop(parts[1], None)
+            if sent_at is not None:
+                line += b" %d" % round((received_at - sent_at) * 1e6)
+        self.send(line)
+
     def drop_client(self):
         self.client.close()
         self.client = None
         self.buffer = b""
         self.last_command = None
+        self.telemetry = False
+        self.pings.clear()
 
     def close(self):
         if self.client is not None:
@@ -299,6 +351,10 @@ def main():
             log.exception("unexpected connect error")
         return
 
+    # Send each command at once instead of holding small writes back until the
+    # previous one is acknowledged (Nagle), which adds up to a WiFi round trip.
+    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+
     buffer = b""
     latest = None
     csv_writer = None
@@ -341,9 +397,16 @@ def main():
                             sock.sendall(b"stop\n")
                         else:
                             for command in commands:
+                                if command.startswith(b"#"):
+                                    teleop.directive(command)
+                                    continue
                                 sock.sendall(command + b"\n")
+                                teleop.forwarded(command, time.perf_counter())
                                 # The teleop resends pwm commands several times a
-                                # second; log only when the command changes.
+                                # second, and pings all differ; log only when a
+                                # (non-ping) command changes.
+                                if command.startswith(b"ping "):
+                                    continue
                                 if command != teleop.last_command:
                                     log.info("teleop -> robot: %s",
                                              command.decode("utf-8", errors="replace"))
@@ -360,6 +423,7 @@ def main():
 
             try:
                 data = sock.recv(4096)
+                received_at = time.perf_counter()
                 if not data:
                     raise ConnectionError("Closed by the server.")
             except ConnectionError as e:
@@ -373,9 +437,20 @@ def main():
             buffer += data
             parts = buffer.split(b"\n")
             for line in parts[:-1]:
-                text = line.decode("utf-8", errors="replace").strip()
+                line = line.strip()
+                if line.startswith(b"#"):
+                    # A reply to a command, not a telemetry record.
+                    if teleop is not None:
+                        teleop.robot_reply(line, received_at)
+                    if not line.startswith(b"#P"):
+                        log.info("robot: %s", line.decode("utf-8", errors="replace"))
+                    continue
+                text = line.decode("utf-8", errors="replace")
                 fields = parse_line(text)
                 if fields is not None:
+                    # Passed on first, so Rerun's work doesn't delay the client.
+                    if teleop is not None and teleop.telemetry:
+                        teleop.send(line)
                     latest = fields
                     if csv_writer is not None:
                         csv_writer.writerow(fields)

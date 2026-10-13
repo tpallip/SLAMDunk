@@ -148,12 +148,21 @@ class Controller_c {
       AUTO
     };
 
+    /** @brief Where a command came from; replies go back the same way. */
+    enum CmdSource {
+      FROM_WIFI,
+      FROM_SERIAL
+    };
+
     uint8_t signal;
     Mode mode;
     UsrMode usr_mode;
     char cmd_buf[64];
     uint8_t cmd_len = 0;
+    char serial_buf[64];         // commands typed over USB, kept apart from WiFi's
+    uint8_t serial_len = 0;
     char mode_message[64] = "";  // last complete command, kept until the next one
+    CmdSource manual_source = FROM_WIFI;  // source of the last manual-mode command
     float manual_left_pwm = 0.0f;
     float manual_right_pwm = 0.0f;
     unsigned long manual_cmd_ms = 0;   // time of the last "pwm" or "vel" command
@@ -185,8 +194,21 @@ class Controller_c {
     void publishTelemetry(Robot_c &robot, RobotWifiAP_c &server, unsigned long timestamp_ms);
     int readClient(RobotWifiAP_c &client);
 
+    /** @brief Collects a command line from USB Serial into serial_buf.
+     * @return The line's length once a newline arrives, otherwise 0. */
+    int readSerial();
+
+    /** @brief Sends a "#"-prefixed reply line over WiFi or USB Serial.
+     * @param to The link the command being answered came from.
+     * @note Lines starting with "#" are not telemetry; tools/logger.py passes
+     * them on to tools/motor_tui.py and doesn't count them as bad records. */
+    void reply(RobotWifiAP_c &server, CmdSource to, const char *format, ...);
+
     /**
-     * @brief Acts on the complete command in cmd_buf.
+     * @brief Acts on one complete command line.
+     * @param cmd The command, null-terminated.
+     * @param source Where it came from; replies and the manual-mode link check
+     * use it.
      * @note Commands: "auto" and "manual" switch mode and stop the motors;
      * "start" starts the line follower in auto mode; "stop" stops the motors
      * (and returns auto mode to waiting); "pwm <left> <right>" sets the motor
@@ -194,9 +216,11 @@ class Controller_c {
      * wheel speeds in mm/s in manual mode, clamped to MANUAL_MAX_SPEED_MM_S;
      * "move <mm>" drives that far straight (negative: backwards) in manual
      * mode, then stops; any other motion command or "stop" cancels it.
-     * Unknown commands are reported on Serial and ignored.
+     * "ping <id>" replies "#P <id> <t_ms>" at once, for measuring the round
+     * trip. Unknown commands get "#E unknown command: ..." and are ignored.
      */
-    void handleCommand(Robot_c &robot, unsigned long now);
+    void handleCommand(Robot_c &robot, RobotWifiAP_c &server, const char *cmd,
+                       CmdSource source, unsigned long now);
 };
 
 #endif

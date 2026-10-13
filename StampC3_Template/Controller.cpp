@@ -84,10 +84,14 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
   // begins counting again.  We now run the remaining controller code.
   update_timer.resetTimer(now);
 
-  // Act on every complete command the client has sent since the last cycle.
-  // readClient() never waits, so this costs nothing when no data has arrived.
+  // Act on every complete command the client has sent since the last cycle,
+  // over WiFi or typed on USB Serial. The readers never wait, so this costs
+  // nothing when no data has arrived.
   while(readClient(server) > 0) {
-    handleCommand(robot, now);
+    handleCommand(robot, server, cmd_buf, FROM_WIFI, now);
+  }
+  while(readSerial() > 0) {
+    handleCommand(robot, server, serial_buf, FROM_SERIAL, now);
   }
 
   // Ask the robot for latest information on surface reflectance sensors.
@@ -131,19 +135,22 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
     // Stop if the client has gone, or (when enabled) if "pwm"/"vel" commands
     // stopped arriving, so a lost connection can't leave the robot driving.
     // A "move" ends by itself (or at its own deadline), so it isn't resent
-    // and the command timeout doesn't apply while it runs.
+    // and the command timeout doesn't apply while it runs. Serial can't tell
+    // whether anyone is listening, so when driven over USB only the timeout
+    // applies.
     bool timed_out = MANUAL_TIMEOUT_MS > 0 && !mover.isActive()
                      && now - manual_cmd_ms > MANUAL_TIMEOUT_MS;
-    if(!server.clientConnected() || timed_out) {
+    bool link_lost = manual_source == FROM_WIFI && !server.clientConnected();
+    if(link_lost || timed_out) {
       clearManual();
     }
     if(mover.isActive()) {
       float left_target, right_target;
       if(!mover.update(robot.getLeftEncoderCount(), robot.getRightEncoderCount(), now,
                        left_target, right_target)) {
-        Serial.printf("move %s: left %+.2f mm, right %+.2f mm still to go\n",
-                      mover.timedOut() ? "timed out" : "done",
-                      mover.getLeftError(), mover.getRightError());
+        reply(server, manual_source, "#I move %s: left %+.2f mm, right %+.2f mm still to go\n",
+              mover.timedOut() ? "timed out" : "done",
+              mover.getLeftError(), mover.getRightError());
       }
       left_speed.setTarget(left_target);
       right_speed.setTarget(right_target);
@@ -287,36 +294,80 @@ int Controller_c::readClient(RobotWifiAP_c &client) {
   return 0;
 }
 
-void Controller_c::handleCommand(Robot_c &robot, unsigned long now) {
-  float left, right;
+int Controller_c::readSerial() {
+  while(Serial.available() > 0) {
+    int recvd_byte = Serial.read();
+    if(recvd_byte < 0) {
+      return 0;
+    }
 
-  if(strcmp(cmd_buf, "auto") == 0) {
+    if(recvd_byte == '\n') {
+      serial_buf[serial_len] = '\0';
+      if(serial_len > 0) {
+        memcpy(mode_message, serial_buf, serial_len + 1);  // +1 copies the '\0'
+      }
+      int len = serial_len;
+      serial_len = 0;
+      return len;
+    }
+    else if(recvd_byte == '\r') {
+      // Ignore the '\r' of "\r\n" line endings (the Serial Monitor sends them).
+    }
+    else if(serial_len < sizeof(serial_buf) - 1) {
+      serial_buf[serial_len++] = (char)recvd_byte;
+    }
+  }
+
+  return 0;
+}
+
+void Controller_c::reply(RobotWifiAP_c &server, CmdSource to, const char *format, ...) {
+  char buffer[128];
+  va_list args;
+  va_start(args, format);
+  vsnprintf(buffer, sizeof(buffer), format, args);
+  va_end(args);
+
+  if(to == FROM_SERIAL) {
+    Serial.print(buffer);
+  } else {
+    server.printf("%s", buffer);
+  }
+}
+
+void Controller_c::handleCommand(Robot_c &robot, RobotWifiAP_c &server, const char *cmd,
+                                 CmdSource source, unsigned long now) {
+  float left, right;
+  unsigned long ping_id;
+
+  if(strcmp(cmd, "auto") == 0) {
     // reset() returns to waiting in AUTO; start with the button or "start".
     setSignal(0);
     robot.setMotorPWM(0, 0);
   }
-  else if(strcmp(cmd_buf, "manual") == 0) {
+  else if(strcmp(cmd, "manual") == 0) {
     setSignal(0);  // leaves the line follower; also sets usr_mode to AUTO
     usr_mode = MANUAL_CTRL;
     manual_vel = false;
     clearManual();
     manual_cmd_ms = now;
+    manual_source = source;
     last_manual_ms = now;
     robot.setMotorPWM(0, 0);
   }
-  else if(strcmp(cmd_buf, "start") == 0) {
+  else if(strcmp(cmd, "start") == 0) {
     if(usr_mode == AUTO) {
       setSignal(1);
     }
   }
-  else if(strcmp(cmd_buf, "stop") == 0) {
+  else if(strcmp(cmd, "stop") == 0) {
     if(usr_mode == AUTO) {
       setSignal(0);
     }
     clearManual();
     robot.setMotorPWM(0, 0);
   }
-  else if(sscanf(cmd_buf, "pwm %f %f", &left, &right) == 2) {
+  else if(sscanf(cmd, "pwm %f %f", &left, &right) == 2) {
     // isfinite rejects "pwm nan 0", which would reach the motors unclamped.
     if(usr_mode == MANUAL_CTRL && isfinite(left) && isfinite(right)) {
       manual_vel = false;
@@ -326,18 +377,20 @@ void Controller_c::handleCommand(Robot_c &robot, unsigned long now) {
       manual_left_pwm = constrain(left, -MANUAL_MAX_PWM, MANUAL_MAX_PWM);
       manual_right_pwm = constrain(right, -MANUAL_MAX_PWM, MANUAL_MAX_PWM);
       manual_cmd_ms = now;
+      manual_source = source;
     }
   }
-  else if(sscanf(cmd_buf, "vel %f %f", &left, &right) == 2) {
+  else if(sscanf(cmd, "vel %f %f", &left, &right) == 2) {
     if(usr_mode == MANUAL_CTRL && isfinite(left) && isfinite(right)) {
       manual_vel = true;
       mover.cancel();
       left_speed.setTarget(constrain(left, -MANUAL_MAX_SPEED_MM_S, MANUAL_MAX_SPEED_MM_S));
       right_speed.setTarget(constrain(right, -MANUAL_MAX_SPEED_MM_S, MANUAL_MAX_SPEED_MM_S));
       manual_cmd_ms = now;
+      manual_source = source;
     }
   }
-  else if(sscanf(cmd_buf, "move %f", &left) == 1) {
+  else if(sscanf(cmd, "move %f", &left) == 1) {
     if(usr_mode == MANUAL_CTRL && isfinite(left)) {
       float counts_per_rev = odometry.encoderCountsPerRevolution;
       manual_vel = true;
@@ -346,9 +399,15 @@ void Controller_c::handleCommand(Robot_c &robot, unsigned long now) {
                   TWO_PI * odometry.leftWheelRadiusMm / counts_per_rev,
                   TWO_PI * odometry.rightWheelRadiusMm / counts_per_rev, now);
       manual_cmd_ms = now;
+      manual_source = source;
     }
   }
+  else if(sscanf(cmd, "ping %lu", &ping_id) == 1) {
+    // Answered in the same cycle, so the round trip includes the wait for the
+    // next 10 ms update (as every other command does) but nothing else.
+    reply(server, source, "#P %lu %lu\n", ping_id, now);
+  }
   else {
-    Serial.printf("unknown command: %s\n", cmd_buf);
+    reply(server, source, "#E unknown command: %s\n", cmd);
   }
 }
