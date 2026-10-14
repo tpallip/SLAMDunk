@@ -9,7 +9,7 @@ int DeadbandTest_c::levelsPerSweep() const {
 }
 
 const char *DeadbandTest_c::start(const Params &p, unsigned long now_ms, int32_t count) {
-  if (p.wheel != 'L' && p.wheel != 'R') return "wheel must be L or R";
+  if (p.wheel != 'L' && p.wheel != 'R' && p.wheel != 'S') return "wheel must be L, R or S";
   if (p.dir != 1 && p.dir != -1) return "dir must be 1 or -1";
   if (p.pwm_min < 0 || p.pwm_max > MAX_PWM || p.pwm_min > p.pwm_max) return "need 0 <= min <= max <= 100";
   if (p.pwm_step < 1) return "step must be at least 1";

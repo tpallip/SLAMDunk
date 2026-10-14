@@ -116,16 +116,33 @@ def plot(path, rows, title):
     return f"plot: {path}"
 
 
-def main():
-    for path in sys.argv[1:]:
+def runs(paths):
+    """(path, suffix, rows, meta) per wheel. An S (spin) run drives both wheels,
+    the right one opposite, so it's split into _L and _R with the right wheel's
+    PWM sign flipped, and each half is analysed like a single-wheel run."""
+    for path in paths:
         rows, meta = load(path)
+        if not rows or rows[0]["wheel"] != "S":
+            yield path, "", rows, meta
+            continue
+        for side, sign in (("L", 1), ("R", -1)):
+            yield path, f"_{side}", [dict(r, wheel=side, pwm=str(sign * int(r["pwm"]))) for r in rows], meta
+
+
+def wheel_label(rows, params):
+    wheel = rows[0]["wheel"] if rows else params.get("wheel", "?")
+    return f"{wheel} (spin)" if params.get("wheel") == "S" else wheel
+
+
+def main():
+    for path, suffix, rows, meta in runs(sys.argv[1:]):
         trial_rows = trials(rows, meta)
-        out = OUT_DIR / Path(path).stem
+        out = OUT_DIR / (Path(path).stem + suffix)
         out.mkdir(parents=True, exist_ok=True)
         write_csv(out / "trials.csv", trial_rows)
 
         params = meta.get("params", {})
-        title = f"keepturn {params.get('wheel', '?')} dir {params.get('dir', '?')} ({Path(path).name})"
+        title = f"keepturn {wheel_label(rows, params)} dir {params.get('dir', '?')} ({Path(path).name})"
         good = [r for r in trial_rows if r["spin_ok"] and r["stop_pwm"] is not None]
         lines = [title, f"end: {meta.get('end', 'unknown')}",
                  f"ramp: 1 PWM every {params.get('step_ms', '?')} ms from {params.get('start', '?')}",

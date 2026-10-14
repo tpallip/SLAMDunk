@@ -7,8 +7,8 @@ manual mode ("vel" sets them to the firmware's feedforward PWM; there is no
 simulated speed loop), "start" sets signal, and manual mode stops after
 MANUAL_TIMEOUT_MS without a "pwm" or "vel" command. "ping <id>" is answered
 with "#P <id> <t_ms>" and unknown commands with "#E ...", like the firmware.
-"test deadband ..." and "test keepturn ..." run fake versions of the on-robot
-tests (FakeDeadband, FakeKeepTurn). "id", "set", "get", "save" and
+"test deadband ...", "test keepturn ..." and "test gain ..." run fake versions
+of the on-robot tests (FakeDeadband, FakeKeepTurn, FakeGain). "id", "set", "get", "save" and
 "config reset" work like the firmware, with the keys, defaults and ranges read
 from StampC3_Template/RobotConfig.*.
 Run the logger with --host 127.0.0.1 --port 9000.
@@ -122,9 +122,18 @@ class FakeController:
         return fields
 
 
+def turn(count, wheel, counts):
+    """Adds counts to the tested wheel; S (spin) turns the right wheel the other way."""
+    if wheel == "S":
+        count["L"] += counts
+        count["R"] -= counts
+    else:
+        count[wheel] += counts
+
+
 class FakeDeadband:
     """Same phases as DeadbandTest_c with a made up wheel, one step per 10 ms."""
-    STILL_MS, START_PWM, COAST_MS = 300, {"L": 29, "R": 24}, 150
+    STILL_MS, START_PWM, COAST_MS = 300, {"L": 29, "R": 24, "S": 32}, 150
 
     def __init__(self, command):
         args = command.split()[2:]
@@ -177,7 +186,7 @@ class FakeDeadband:
         if delta:
             moved = int(delta + random.random())
             if moved:
-                self.count[self.wheel] += self.dir * moved
+                turn(self.count, self.wheel, self.dir * moved)
                 self.last_move = self.t
         self.rows += 1
         return (f"#B,{self.trial},{self.repeat},{self.phase},{self.wheel},{pwm},{self.t},{self.t * 1000 + 3000},1,"
@@ -186,7 +195,7 @@ class FakeDeadband:
 
 class FakeKeepTurn:
     """Same phases as KeepTurnTest_c with a made up wheel, one step per 10 ms."""
-    STILL_MS, STOP_PWM = 300, {"L": 15, "R": 11}
+    STILL_MS, STOP_PWM = 300, {"L": 15, "R": 11, "S": 18}
 
     def __init__(self, command):
         args = command.split()[2:]
@@ -230,11 +239,78 @@ class FakeKeepTurn:
         pwm = self.dir * self.level if self.phase in ("spin", "ramp") else 0
         if pwm and self.level >= self.stop_at:
             if int((self.level - 12) * 0.13 + random.random()):
-                self.count[self.wheel] += self.dir
+                turn(self.count, self.wheel, self.dir)
                 self.last_move = self.t
         self.rows += 1
         return (f"#B,{self.trial},{self.phase},{self.wheel},{pwm},{self.t},{self.t * 1000 + 3000},1,"
                 f"{self.count['L']},{self.count['R']}")
+
+
+class FakeGain:
+    """Same phases as GainTest_c with a made up wheel, one step per 10 ms.
+
+    Counts per 10 ms are (pwm - 12) * 0.13, falling off a little above 60 PWM.
+    """
+    STILL_MS = 300
+
+    def __init__(self, command):
+        args = command.split()[2:]
+        defaults = ["L", "1", "20", "100", "5", "3", "500", "1000", "1500"]
+        args = args + defaults[len(args):]
+        self.wheel = args[0].upper()
+        (self.dir, self.lo, self.hi, self.pwm_step, self.trials,
+         self.settle_ms, self.hold_ms, self.rest_ms) = (int(a) for a in args[1:9])
+        self.name = "gain"
+        self.top = (self.hi - self.lo) // self.pwm_step
+        self.trial, self.t, self.rows, self.last_move, self.carry = 0, 0, 0, 0, 0.0
+        self.count = {"L": 0, "R": 0}
+        self.begin_rest()
+
+    def begin_rest(self):
+        self.trial += 1
+        self.phase, self.phase_start, self.up, self.index = "rest", self.t, False, self.top
+
+    def header(self, t_ms):
+        self.t = self.phase_start = self.last_move = t_ms
+        return [f"#BH gain wheel={self.wheel} dir={self.dir} min={self.lo} max={self.hi} step={self.pwm_step} "
+                f"repeats={self.trials} settle_ms={self.settle_ms} hold_ms={self.hold_ms} rest_ms={self.rest_ms} "
+                f"still_ms={self.STILL_MS} trials={self.trials}",
+                "#BC trial,leg,phase,wheel,pwm,t_ms,enc_us,enc_ok,enc_l,enc_r"]
+
+    def step(self):
+        self.t += 10
+        elapsed = self.t - self.phase_start
+        if self.phase == "rest":
+            if elapsed >= self.rest_ms and self.t - self.last_move >= self.STILL_MS:
+                self.phase, self.phase_start = "settle", self.t
+        elif self.phase == "settle":
+            if elapsed >= self.settle_ms:
+                self.phase, self.phase_start = "hold", self.t
+        elif elapsed >= self.hold_ms:
+            if not self.up and self.index > 0:
+                self.index -= 1
+            else:
+                self.up = True
+                if self.index < self.top:
+                    self.index += 1
+                elif self.trial >= self.trials:
+                    return f"#BE gain done rows={self.rows} trials={self.trial}"
+                else:
+                    self.begin_rest()
+            if self.phase != "rest":
+                self.phase, self.phase_start = "settle", self.t
+        level = self.lo + self.index * self.pwm_step
+        pwm = self.dir * level if self.phase != "rest" else 0
+        if pwm and level >= 15:
+            rate = (level - 12) * 0.13 * (1 - 0.004 * max(0, level - 60))
+            self.carry += rate * random.uniform(0.95, 1.05)
+            moved, self.carry = int(self.carry), self.carry - int(self.carry)
+            if moved:
+                turn(self.count, self.wheel, self.dir * moved)
+                self.last_move = self.t
+        self.rows += 1
+        return (f"#B,{self.trial},{'up' if self.up else 'down'},{self.phase},{self.wheel},{pwm},{self.t},"
+                f"{self.t * 1000 + 3000},1,{self.count['L']},{self.count['R']}")
 
 
 class FakeConfig:
@@ -336,8 +412,9 @@ def serve(conn, records):
                 if replies is not None:
                     conn.sendall("".join(r + "\n" for r in replies).encode())
                     continue
-                if parts[:2] in (["test", "deadband"], ["test", "keepturn"]):
-                    test = FakeDeadband(command) if parts[1] == "deadband" else FakeKeepTurn(command)
+                fakes = {"deadband": FakeDeadband, "keepturn": FakeKeepTurn, "gain": FakeGain}
+                if len(parts) >= 2 and parts[0] == "test" and parts[1] in fakes:
+                    test = fakes[parts[1]](command)
                     t_ms = int((time.monotonic() - start) * 1000)
                     conn.sendall(("\n".join(test.header(t_ms)) + "\n").encode())
                     print(f"robot got {command!r} -> fake {parts[1]} test, {test.trials} trials")

@@ -5,7 +5,7 @@ const unsigned long KeepTurnTest_c::REST_EXTRA_MAX_MS;
 const int KeepTurnTest_c::MAX_PWM;
 
 const char *KeepTurnTest_c::start(const Params &p, unsigned long now_ms, int32_t count) {
-  if (p.wheel != 'L' && p.wheel != 'R') return "wheel must be L or R";
+  if (p.wheel != 'L' && p.wheel != 'R' && p.wheel != 'S') return "wheel must be L, R or S";
   if (p.dir != 1 && p.dir != -1) return "dir must be 1 or -1";
   if (p.start_pwm < 1 || p.start_pwm > MAX_PWM) return "need 1 <= start <= 100";
   if (p.step_ms < 10) return "step_ms must be at least 10";

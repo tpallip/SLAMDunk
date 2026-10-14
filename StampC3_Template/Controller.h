@@ -9,6 +9,7 @@
 #include "MoveController.h"
 #include "DeadbandTest.h"
 #include "KeepTurnTest.h"
+#include "GainTest.h"
 #include "RobotConfig.h"
 
 /**
@@ -40,6 +41,8 @@ class Controller_c {
     DeadbandTest_c deadband;
     /** @brief "test keepturn" command. */
     KeepTurnTest_c keepturn;
+    /** @brief "test gain" command. */
+    GainTest_c gain;
 
     /** @brief Creates a controller in its waiting state. */
     Controller_c();
@@ -119,7 +122,7 @@ class Controller_c {
     unsigned long manual_cmd_ms = 0;   // time of the last "pwm" or "vel" command
     bool manual_vel = false;           // true: "vel" speed control; false: raw "pwm"
     unsigned long last_manual_ms = 0;  // previous manual-mode cycle, for the PI's dt
-    enum TestKind { DEADBAND_TEST, KEEPTURN_TEST };
+    enum TestKind { DEADBAND_TEST, KEEPTURN_TEST, GAIN_TEST };
     TestKind test_kind = DEADBAND_TEST;
     CmdSource test_source = FROM_WIFI;
     unsigned long test_rows = 0;
@@ -141,6 +144,13 @@ class Controller_c {
 
     void startKeepTurnTest(Robot_c &robot, RobotWifiAP_c &server, const char *cmd,
                            CmdSource source, unsigned long now);
+
+    void startGainTest(Robot_c &robot, RobotWifiAP_c &server, const char *cmd,
+                       CmdSource source, unsigned long now);
+
+    int32_t testCount(char wheel, int32_t left, int32_t right);
+
+    void setTestPWM(Robot_c &robot, char wheel, int pwm);
 
     void beginMotorTest(Robot_c &robot, CmdSource source, TestKind kind);
 
@@ -189,11 +199,14 @@ class Controller_c {
      * "move <mm>" drives that far straight (negative: backwards) in manual
      * mode, then stops; any other motion command or "stop" cancels it.
      * "ping <id>" replies "#P <id> <t_ms>" at once, for measuring the round
-     * trip. "test deadband <L|R> [dir min max step repeats rest_ms run_ms]"
-     * runs the deadband test, and "test keepturn <L|R> [dir start step_ms
-     * repeats spin_ms rest_ms]" the keep-turning test; "stop" or the button
-     * ends either. "id" replies "#ID <name>". "set <key> <value>" changes a
-     * setting until reboot and "get [key]" reads them back, both as "#C <key>
+     * trip. "test deadband <L|R|S> [dir min max step repeats rest_ms run_ms]"
+     * runs the deadband test, and "test keepturn <L|R|S> [dir start step_ms
+     * repeats spin_ms rest_ms]" the keep-turning test, and "test gain <L|R|S>
+     * [dir min max step repeats settle_ms hold_ms rest_ms]" the speed vs PWM
+     * test. S spins the robot on the spot (right wheel opposite to the
+     * left) instead of one wheel; "stop" or the button ends any test.
+     * "id" replies "#ID <name>". "set <key> <value>" changes a setting
+     * until reboot and "get [key]" reads them back, both as "#C <key>
      * <value>"; "save" keeps the current settings over a reboot and "config
      * reset" goes back to the firmware defaults. Unknown commands get
      * "#E unknown command: ..." and are ignored. "name <new>" saves the

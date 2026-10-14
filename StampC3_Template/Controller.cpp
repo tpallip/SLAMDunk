@@ -213,12 +213,12 @@ void Controller_c::startDeadbandTest(Robot_c &robot, RobotWifiAP_c &server, cons
   int rest_ms = (int)p.rest_ms, run_ms = (int)p.run_ms;
   if(sscanf(cmd, "test deadband %c %d %d %d %d %d %d %d", &p.wheel, &p.dir, &p.pwm_min,
             &p.pwm_max, &p.pwm_step, &p.repeats, &rest_ms, &run_ms) < 1) {
-    reply(server, source, "#E usage: test deadband <L|R> [dir min max step repeats rest_ms run_ms]\n");
+    reply(server, source, "#E usage: test deadband <L|R|S> [dir min max step repeats rest_ms run_ms]\n");
     return;
   }
   p.rest_ms = rest_ms < 0 ? 0 : rest_ms;
   p.run_ms = run_ms < 0 ? 0 : run_ms;
-  int32_t count = p.wheel == 'L' ? robot.getLeftEncoderCount() : robot.getRightEncoderCount();
+  int32_t count = testCount(p.wheel, robot.getLeftEncoderCount(), robot.getRightEncoderCount());
   const char *problem = deadband.start(p, now, count);
   if(problem != nullptr) {
     reply(server, source, "#E test deadband: %s\n", problem);
@@ -239,13 +239,13 @@ void Controller_c::startKeepTurnTest(Robot_c &robot, RobotWifiAP_c &server, cons
   int step_ms = (int)p.step_ms, spin_ms = (int)p.spin_ms, rest_ms = (int)p.rest_ms;
   if(sscanf(cmd, "test keepturn %c %d %d %d %d %d %d", &p.wheel, &p.dir, &p.start_pwm,
             &step_ms, &p.repeats, &spin_ms, &rest_ms) < 1) {
-    reply(server, source, "#E usage: test keepturn <L|R> [dir start step_ms repeats spin_ms rest_ms]\n");
+    reply(server, source, "#E usage: test keepturn <L|R|S> [dir start step_ms repeats spin_ms rest_ms]\n");
     return;
   }
   p.step_ms = step_ms < 0 ? 0 : step_ms;
   p.spin_ms = spin_ms < 0 ? 0 : spin_ms;
   p.rest_ms = rest_ms < 0 ? 0 : rest_ms;
-  int32_t count = p.wheel == 'L' ? robot.getLeftEncoderCount() : robot.getRightEncoderCount();
+  int32_t count = testCount(p.wheel, robot.getLeftEncoderCount(), robot.getRightEncoderCount());
   const char *problem = keepturn.start(p, now, count);
   if(problem != nullptr) {
     reply(server, source, "#E test keepturn: %s\n", problem);
@@ -258,6 +258,49 @@ void Controller_c::startKeepTurnTest(Robot_c &robot, RobotWifiAP_c &server, cons
         p.wheel, p.dir, p.start_pwm, p.step_ms, p.repeats, p.spin_ms, p.rest_ms,
         KeepTurnTest_c::STILL_MS, p.repeats);
   reply(server, source, "#BC trial,phase,wheel,pwm,t_ms,enc_us,enc_ok,enc_l,enc_r\n");
+}
+
+void Controller_c::startGainTest(Robot_c &robot, RobotWifiAP_c &server, const char *cmd,
+                                 CmdSource source, unsigned long now) {
+  GainTest_c::Params p;
+  int settle_ms = (int)p.settle_ms, hold_ms = (int)p.hold_ms, rest_ms = (int)p.rest_ms;
+  if(sscanf(cmd, "test gain %c %d %d %d %d %d %d %d %d", &p.wheel, &p.dir, &p.pwm_min,
+            &p.pwm_max, &p.pwm_step, &p.repeats, &settle_ms, &hold_ms, &rest_ms) < 1) {
+    reply(server, source, "#E usage: test gain <L|R|S> [dir min max step repeats settle_ms hold_ms rest_ms]\n");
+    return;
+  }
+  p.settle_ms = settle_ms < 0 ? 0 : settle_ms;
+  p.hold_ms = hold_ms < 0 ? 0 : hold_ms;
+  p.rest_ms = rest_ms < 0 ? 0 : rest_ms;
+  int32_t count = testCount(p.wheel, robot.getLeftEncoderCount(), robot.getRightEncoderCount());
+  const char *problem = gain.start(p, now, count);
+  if(problem != nullptr) {
+    reply(server, source, "#E test gain: %s\n", problem);
+    return;
+  }
+
+  beginMotorTest(robot, source, GAIN_TEST);
+  reply(server, source, "#BH gain wheel=%c dir=%d min=%d max=%d step=%d repeats=%d settle_ms=%lu "
+        "hold_ms=%lu rest_ms=%lu still_ms=%lu trials=%d\n",
+        p.wheel, p.dir, p.pwm_min, p.pwm_max, p.pwm_step, p.repeats, p.settle_ms, p.hold_ms,
+        p.rest_ms, GainTest_c::STILL_MS, p.repeats);
+  reply(server, source, "#BC trial,leg,phase,wheel,pwm,t_ms,enc_us,enc_ok,enc_l,enc_r\n");
+}
+
+// S (spin) turns the robot on the spot: right wheel opposite to the left.
+// Its count changes whenever either wheel moves.
+int32_t Controller_c::testCount(char wheel, int32_t left, int32_t right) {
+  if(wheel == 'L') return left;
+  if(wheel == 'R') return right;
+  return left - right;
+}
+
+void Controller_c::setTestPWM(Robot_c &robot, char wheel, int pwm) {
+  if(wheel == 'S') {
+    robot.setMotorPWM(pwm, -pwm);
+  } else {
+    robot.setMotorPWM(wheel == 'L' ? pwm : 0, wheel == 'R' ? pwm : 0);
+  }
 }
 
 void Controller_c::beginMotorTest(Robot_c &robot, CmdSource source, TestKind kind) {
@@ -284,15 +327,31 @@ void Controller_c::runMotorTest(Robot_c &robot, RobotWifiAP_c &server, unsigned 
   long enc_l = robot.getLeftEncoderCount();
   long enc_r = robot.getRightEncoderCount();
 
+  if(test_kind == GAIN_TEST) {
+    const GainTest_c::Params &p = gain.getParams();
+    gain.update(now, testCount(p.wheel, enc_l, enc_r));
+    if(!gain.active()) {
+      endMotorTest(robot, server, now, "done");
+      return;
+    }
+    int pwm = gain.getPwm();
+    setTestPWM(robot, p.wheel, pwm);
+    reply(server, test_source, "#B,%d,%s,%s,%c,%d,%lu,%lu,%d,%ld,%ld\n",
+          gain.getTrial(), gain.getLegName(), gain.getPhaseName(), p.wheel, pwm, now, enc_us,
+          enc_ok ? 1 : 0, enc_l, enc_r);
+    test_rows++;
+    return;
+  }
+
   if(test_kind == KEEPTURN_TEST) {
     const KeepTurnTest_c::Params &p = keepturn.getParams();
-    keepturn.update(now, p.wheel == 'L' ? enc_l : enc_r);
+    keepturn.update(now, testCount(p.wheel, enc_l, enc_r));
     if(!keepturn.active()) {
       endMotorTest(robot, server, now, "done");
       return;
     }
     int pwm = keepturn.getPwm();
-    robot.setMotorPWM(p.wheel == 'L' ? pwm : 0, p.wheel == 'R' ? pwm : 0);
+    setTestPWM(robot, p.wheel, pwm);
     reply(server, test_source, "#B,%d,%s,%c,%d,%lu,%lu,%d,%ld,%ld\n",
           keepturn.getTrial(), keepturn.getPhaseName(), p.wheel, pwm, now, enc_us,
           enc_ok ? 1 : 0, enc_l, enc_r);
@@ -301,14 +360,14 @@ void Controller_c::runMotorTest(Robot_c &robot, RobotWifiAP_c &server, unsigned 
   }
 
   const DeadbandTest_c::Params &p = deadband.getParams();
-  deadband.update(now, p.wheel == 'L' ? enc_l : enc_r);
+  deadband.update(now, testCount(p.wheel, enc_l, enc_r));
   if(!deadband.active()) {
     endMotorTest(robot, server, now, "done");
     return;
   }
 
   int pwm = deadband.getPwm();
-  robot.setMotorPWM(p.wheel == 'L' ? pwm : 0, p.wheel == 'R' ? pwm : 0);
+  setTestPWM(robot, p.wheel, pwm);
   bool running = deadband.getPhase() == DeadbandTest_c::RUN;
   reply(server, test_source, "#B,%d,%d,%s,%c,%d,%lu,%lu,%d,%ld,%ld,%d\n",
         deadband.getTrial(), deadband.getRepeat(), running ? "run" : "rest", p.wheel, pwm,
@@ -318,15 +377,21 @@ void Controller_c::runMotorTest(Robot_c &robot, RobotWifiAP_c &server, unsigned 
 
 void Controller_c::endMotorTest(Robot_c &robot, RobotWifiAP_c &server, unsigned long now,
                                 const char *why) {
-  bool keep = test_kind == KEEPTURN_TEST;
-  if(keep) {
+  const char *name = "deadband";
+  int trials = deadband.getTrial();
+  if(test_kind == KEEPTURN_TEST) {
     keepturn.abort();
+    name = "keepturn";
+    trials = keepturn.getTrial();
+  } else if(test_kind == GAIN_TEST) {
+    gain.abort();
+    name = "gain";
+    trials = gain.getTrial();
   } else if(deadband.active()) {
     deadband.abort();
   }
   robot.setMotorPWM(0, 0);
-  reply(server, test_source, "#BE %s %s rows=%lu trials=%d\n", keep ? "keepturn" : "deadband",
-        why, test_rows, keep ? keepturn.getTrial() : deadband.getTrial());
+  reply(server, test_source, "#BE %s %s rows=%lu trials=%d\n", name, why, test_rows, trials);
   usr_mode = MANUAL_CTRL;
   manual_vel = false;
   clearManual();
@@ -634,6 +699,9 @@ void Controller_c::handleCommand(Robot_c &robot, RobotWifiAP_c &server, const ch
   }
   else if(strncmp(cmd, "test keepturn", 13) == 0) {
     startKeepTurnTest(robot, server, cmd, source, now);
+  }
+  else if(strncmp(cmd, "test gain", 9) == 0) {
+    startGainTest(robot, server, cmd, source, now);
   }
   else if(strncmp(cmd, "set ", 4) == 0 || strncmp(cmd, "get", 3) == 0 || strcmp(cmd, "save") == 0 ||
           strcmp(cmd, "config reset") == 0 || strcmp(cmd, "id") == 0 || strncmp(cmd, "name ", 5) == 0) {

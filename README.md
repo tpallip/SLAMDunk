@@ -559,10 +559,18 @@ parameters and how it ended.
 `stop`, the button, or dropping the connection ends a test early. `pwm`,
 `vel`, `move`, `start` and another `test` are refused while one is running.
 
+**Stand or floor:** `L` or `R` tests one wheel, for the robot on a stand.
+On the floor use `S` (spin): both wheels at the same PWM in opposite
+directions (`dir 1`: left forward, right backward), so the robot turns on
+the spot and both wheels carry its weight. The analysis scripts split an `S`
+run into `<csv name>_L/` and `<csv name>_R/`. Speeds and thresholds on the
+floor are what the config should use; the stand runs show the motors on
+their own.
+
 #### Deadband test
 
 ```
-test deadband <L|R> [dir min max step repeats rest_ms run_ms]
+test deadband <L|R|S> [dir min max step repeats rest_ms run_ms]
 ```
 
 Defaults are `1 0 60 5 3 1500 1500`. For each level the wheel waits until
@@ -584,7 +592,7 @@ fake this test if you want to try it without the robot.
 #### Keep-turning test
 
 ```
-test keepturn <L|R> [dir start step_ms repeats spin_ms rest_ms]
+test keepturn <L|R|S> [dir start step_ms repeats spin_ms rest_ms]
 ```
 
 Defaults are `1 50 200 5 1000 1500`. The wheel spins at `start` for
@@ -597,6 +605,30 @@ Columns: `trial, phase, wheel, pwm, t_ms, enc_us, enc_ok, enc_l, enc_r`.
 ```bash
 python3 bench/1.3_keepturn/analyse.py logs/bench_keepturn_<time>.csv
 ```
+
+#### Gain test (speed vs PWM)
+
+```
+test gain <L|R|S> [dir min max step repeats settle_ms hold_ms rest_ms]
+```
+
+Defaults are `1 20 100 5 3 500 1000 1500`. Each trial starts the wheel at
+`max`, steps down to `min` and back up to `max` without stopping. At each
+level it waits `settle_ms`, then measures over `hold_ms`. One trial with the
+defaults is about 50 s. Keep `min` above the keep-turning PWM or the wheel
+stalls at the bottom.
+
+Columns: `trial, leg (down/up), phase (rest/settle/hold), wheel, pwm, t_ms,
+enc_us, enc_ok, enc_l, enc_r`.
+
+```bash
+python3 bench/1.5_gain/analyse.py [--fit-max PWM] logs/bench_gain_<time>.csv
+```
+
+Gives the speed at each level (down and up separately), a linear fit with
+the `*_ff_offset_pwm` / `*_ff_mm_s_per_pwm` values for the config, a
+quadratic fit for comparison on held-back levels, and whether the speed
+flattens at the top. If it does, `--fit-max` fits the line below that.
 
 ### Wheel speed control (`vel`)
 

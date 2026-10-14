@@ -72,13 +72,17 @@ HELP = """\
 [b]Measuring[/b]
   zero             restart the "since zero" encoder counts
   ping [n] [ms]    round-trip test: n pings, one every ms (default 200, 20)
-  test deadband <L|R> [dir min max step repeats rest_ms run_ms]
+  test deadband <L|R|S> [dir min max step repeats rest_ms run_ms]
                    on-robot deadband test (defaults 1 0 60 5 3 1500 1500);
                    the logger saves its rows to logs/bench_deadband_<time>.csv;
                    stop, the StampC3 button or quit ends it early
-  test keepturn <L|R> [dir start step_ms repeats spin_ms rest_ms]
+  test keepturn <L|R|S> [dir start step_ms repeats spin_ms rest_ms]
                    keep-turning test (defaults 1 50 200 5 1000 1500): spin,
                    then drop the PWM by 1 every step_ms until the wheel stops
+  test gain <L|R|S> [dir min max step repeats settle_ms hold_ms rest_ms]
+                   speed vs PWM (defaults 1 20 100 5 3 500 1000 1500): steps
+                   down from max to min and back up, measuring each level
+                   (S instead of L/R: spin on the spot, for tests on the floor)
 [b]Settings[/b] (see config/ and the README)
   id               the robot's name, which picks config/<name>.json
   get [key]        show one setting, or all of them
