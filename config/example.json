@@ -1,0 +1,19 @@
+{
+  "_comment": "Copy to config/<robot id>.json (the robot's WiFi name, e.g. SLAMDunk-3FA2). Only list what differs for your robot; anything missing uses the firmware default.",
+
+  "left_wheel_radius_mm": 16.0,
+  "right_wheel_radius_mm": 16.0,
+  "wheel_separation_mm": 90.0,
+
+  "left_breakaway_pwm": 40,
+  "right_breakaway_pwm": 42,
+  "left_run_min_pwm": 19,
+  "right_run_min_pwm": 14,
+  "left_ff_offset_pwm": 17,
+  "left_ff_mm_s_per_pwm": 3.5,
+  "right_ff_offset_pwm": 12,
+  "right_ff_mm_s_per_pwm": 3.75,
+
+  "move_stop_lead_s": 0.07,
+  "line_threshold": 1400
+}

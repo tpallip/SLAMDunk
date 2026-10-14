@@ -1,42 +1,53 @@
 #include "Controller.h"
 
-const unsigned long Controller_c::UPDATE_INTERVAL_MS;
-const unsigned long Controller_c::TELEMETRY_INTERVAL_MS;
-const unsigned long Controller_c::RECOVERY_TIMEOUT_MS;
-const uint16_t Controller_c::LINE_THRESHOLD;
-constexpr float Controller_c::BASE_PWM;
-constexpr float Controller_c::LINE_FOLLOW_GAIN;
-constexpr float Controller_c::RECOVERY_LEFT_PWM;
-constexpr float Controller_c::RECOVERY_RIGHT_PWM;
-constexpr float Controller_c::MANUAL_MAX_PWM;
-const unsigned long Controller_c::MANUAL_TIMEOUT_MS;
-constexpr float Controller_c::MANUAL_MAX_SPEED_MM_S;
-constexpr float Controller_c::SPEED_KP;
-constexpr float Controller_c::SPEED_KI;
-constexpr float Controller_c::LEFT_BREAKAWAY_PWM;
-constexpr float Controller_c::RIGHT_BREAKAWAY_PWM;
-constexpr float Controller_c::LEFT_RUN_MIN_PWM;
-constexpr float Controller_c::RIGHT_RUN_MIN_PWM;
-constexpr float Controller_c::LEFT_FF_OFFSET_PWM;
-constexpr float Controller_c::LEFT_FF_MM_S_PER_PWM;
-constexpr float Controller_c::RIGHT_FF_OFFSET_PWM;
-constexpr float Controller_c::RIGHT_FF_MM_S_PER_PWM;
-constexpr float Controller_c::MOVE_KP;
-constexpr float Controller_c::MOVE_MAX_SPEED_MM_S;
-constexpr float Controller_c::MOVE_MIN_SPEED_MM_S;
-constexpr float Controller_c::MOVE_TOLERANCE_MM;
-constexpr float Controller_c::MOVE_STOP_LEAD_S;
-constexpr float Controller_c::MOVE_MAX_DISTANCE_MM;
 
 Controller_c::Controller_c()
-  : left_speed(SPEED_KP, SPEED_KI, LEFT_FF_OFFSET_PWM, LEFT_FF_MM_S_PER_PWM,
-               MANUAL_MAX_PWM, LEFT_BREAKAWAY_PWM, LEFT_RUN_MIN_PWM),
-    right_speed(SPEED_KP, SPEED_KI, RIGHT_FF_OFFSET_PWM, RIGHT_FF_MM_S_PER_PWM,
-                MANUAL_MAX_PWM, RIGHT_BREAKAWAY_PWM, RIGHT_RUN_MIN_PWM),
-    mover(MOVE_KP, MOVE_MAX_SPEED_MM_S, MOVE_MIN_SPEED_MM_S, MOVE_TOLERANCE_MM, MOVE_STOP_LEAD_S),
-    update_timer(UPDATE_INTERVAL_MS),
-    telemetry_timer(TELEMETRY_INTERVAL_MS) {
+  : left_speed(0, 0, 0, 1, 0, 0, 0),
+    right_speed(0, 0, 0, 1, 0, 0, 0),
+    mover(0, 0, 0, 0, 0) {
+  applyConfig();
   reset();
+}
+
+void Controller_c::begin(const char *id) {
+  robot_id = id;
+  bool loaded = config.load();
+  applyConfig();
+  Serial.printf("%s: %s\n", robot_id, loaded ? "loaded saved config" : "no saved config, using defaults");
+}
+
+void Controller_c::applyConfig() {
+  const RobotConfigValues_t &c = config.values;
+
+  update_timer.setIntervalMS((unsigned long)c.update_interval_ms);
+  telemetry_timer.setIntervalMS((unsigned long)c.telemetry_interval_ms);
+
+  odometry.leftWheelRadiusMm = c.left_wheel_radius_mm;
+  odometry.rightWheelRadiusMm = c.right_wheel_radius_mm;
+  odometry.wheelSeparationMm = c.wheel_separation_mm;
+
+  WheelSpeedController_c *wheels[2] = {&left_speed, &right_speed};
+  for (int i = 0; i < 2; i++) {
+    bool left = i == 0;
+    WheelSpeedController_c &w = *wheels[i];
+    w.kp = c.speed_kp;
+    w.ki = c.speed_ki;
+    w.ff_offset_pwm = left ? c.left_ff_offset_pwm : c.right_ff_offset_pwm;
+    w.ff_mm_s_per_pwm = left ? c.left_ff_mm_s_per_pwm : c.right_ff_mm_s_per_pwm;
+    w.max_pwm = c.manual_max_pwm;
+    w.breakaway_pwm = left ? c.left_breakaway_pwm : c.right_breakaway_pwm;
+    w.run_min_pwm = left ? c.left_run_min_pwm : c.right_run_min_pwm;
+    w.kick_ramp_pwm_per_s = c.kick_ramp_pwm_per_s;
+    w.window_ms = (unsigned long)c.speed_window_ms;
+    w.min_counts = c.speed_min_counts;
+    w.stall_min_ms = (unsigned long)c.stall_min_ms;
+  }
+
+  mover.kp = c.move_kp;
+  mover.max_speed_mm_s = c.move_max_speed_mm_s;
+  mover.min_speed_mm_s = c.move_min_speed_mm_s;
+  mover.tolerance_mm = c.move_tolerance_mm;
+  mover.stop_lead_s = c.move_stop_lead_s;
 }
 
 void Controller_c::reset() {
@@ -145,8 +156,8 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
     // and the command timeout doesn't apply while it runs. Serial can't tell
     // whether anyone is listening, so when driven over USB only the timeout
     // applies.
-    bool timed_out = MANUAL_TIMEOUT_MS > 0 && !mover.isActive()
-                     && now - manual_cmd_ms > MANUAL_TIMEOUT_MS;
+    unsigned long timeout_ms = (unsigned long)config.values.manual_timeout_ms;
+    bool timed_out = !mover.isActive() && now - manual_cmd_ms > timeout_ms;
     bool link_lost = manual_source == FROM_WIFI && !server.clientConnected();
     if(link_lost || timed_out) {
       clearManual();
@@ -181,7 +192,7 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
 
 bool Controller_c::lineDetected(const Robot_c &robot) const {
   // Note: only using the central sensor to detect a line.
-  if (robot.surface.reading[2] >= LINE_THRESHOLD) {
+  if (robot.surface.reading[2] >= config.values.line_threshold) {
     return true;
   }
 
@@ -324,6 +335,66 @@ void Controller_c::endMotorTest(Robot_c &robot, RobotWifiAP_c &server, unsigned 
   last_manual_ms = now;
 }
 
+void Controller_c::handleConfigCommand(RobotWifiAP_c &server, const char *cmd, CmdSource source) {
+  char key[40];
+  float value;
+
+  if(strcmp(cmd, "id") == 0) {
+    reply(server, source, "#ID %s\n", robot_id);
+  }
+  else if(strncmp(cmd, "name ", 5) == 0) {
+    const char *name = cmd + 5;
+    if(!RobotConfig_c::validName(name)) {
+      reply(server, source, "#E name: 1 to %d letters, digits, - or _\n", RobotConfig_c::MAX_NAME_LEN);
+    } else if(!RobotConfig_c::saveName(name)) {
+      reply(server, source, "#E name: couldn't write to flash\n");
+    } else {
+      reply(server, source, "#I name saved: %s (reboot to use it)\n", name);
+    }
+  }
+  else if(strcmp(cmd, "get") == 0) {
+    for(int i = 0; i < config.size(); i++) {
+      reply(server, source, "#C %s %g\n", config.entry(i).key, *config.entry(i).value);
+    }
+  }
+  else if(sscanf(cmd, "get %39s", key) == 1) {
+    const RobotConfig_c::Entry *e = config.find(key);
+    if(e == nullptr) {
+      reply(server, source, "#E get: unknown key %s\n", key);
+    } else {
+      reply(server, source, "#C %s %g\n", e->key, *e->value);
+    }
+  }
+  else if(sscanf(cmd, "set %39s %f", key, &value) == 2) {
+    RobotConfig_c::SetResult result = config.set(key, value);
+    if(result == RobotConfig_c::SET_UNKNOWN_KEY) {
+      reply(server, source, "#E set: unknown key %s\n", key);
+    } else if(result == RobotConfig_c::SET_OUT_OF_RANGE) {
+      const RobotConfig_c::Entry *e = config.find(key);
+      reply(server, source, "#E set: %s must be %g to %g\n", key, e->min, e->max);
+    } else {
+      applyConfig();
+      reply(server, source, "#C %s %g\n", key, *config.find(key)->value);
+    }
+  }
+  else if(strcmp(cmd, "save") == 0) {
+    bool changed = false;
+    if(!config.save(changed)) {
+      reply(server, source, "#E save: couldn't write to flash\n");
+    } else {
+      reply(server, source, "#I config %s\n", changed ? "saved" : "unchanged, nothing written");
+    }
+  }
+  else if(strcmp(cmd, "config reset") == 0) {
+    config.resetToDefaults();
+    applyConfig();
+    reply(server, source, "#I config reset to defaults (send save to keep it)\n");
+  }
+  else {
+    reply(server, source, "#E usage: set <key> <value> | get [key] | save | config reset | id | name <new>\n");
+  }
+}
+
 void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
   bool line_detected = lineDetected(robot);
 
@@ -335,7 +406,7 @@ void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
   if (mode == SEARCHING_FOR_LINE) {
     if (line_detected) {
       mode = FOLLOWING_LINE;
-    } else if (now - recovery_start_ms >= RECOVERY_TIMEOUT_MS) {
+    } else if (now - recovery_start_ms >= (unsigned long)config.values.recovery_timeout_ms) {
       mode = STOPPED;
     }
   }
@@ -346,13 +417,14 @@ void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
   }
 
   if (mode == SEARCHING_FOR_LINE) {
-    robot.setMotorPWM(RECOVERY_LEFT_PWM, RECOVERY_RIGHT_PWM);
+    robot.setMotorPWM(config.values.recovery_left_pwm, config.values.recovery_right_pwm);
     return;
   }
 
   float error = (float)robot.surface.reading[1] - (float)robot.surface.reading[3];
-  float turn = error * LINE_FOLLOW_GAIN;
-  robot.setMotorPWM(BASE_PWM - turn, BASE_PWM + turn);
+  float turn = error * config.values.line_follow_gain;
+  float base = config.values.base_pwm;
+  robot.setMotorPWM(base - turn, base + turn);
 }
 
 void Controller_c::publishTelemetry(Robot_c &robot, RobotWifiAP_c &server, unsigned long timestamp_ms) {
@@ -485,7 +557,8 @@ void Controller_c::handleCommand(Robot_c &robot, RobotWifiAP_c &server, const ch
       return;
     }
     if(strncmp(cmd, "pwm ", 4) == 0 || strncmp(cmd, "vel ", 4) == 0 ||
-       strncmp(cmd, "move ", 5) == 0 || strncmp(cmd, "test ", 5) == 0 || strcmp(cmd, "start") == 0) {
+       strncmp(cmd, "move ", 5) == 0 || strncmp(cmd, "test ", 5) == 0 || strcmp(cmd, "start") == 0 ||
+       strncmp(cmd, "set ", 4) == 0 || strcmp(cmd, "config reset") == 0) {
       reply(server, source, "#E a test is running; send stop first\n");
       return;
     }
@@ -525,8 +598,9 @@ void Controller_c::handleCommand(Robot_c &robot, RobotWifiAP_c &server, const ch
       mover.cancel();
       left_speed.reset();
       right_speed.reset();
-      manual_left_pwm = constrain(left, -MANUAL_MAX_PWM, MANUAL_MAX_PWM);
-      manual_right_pwm = constrain(right, -MANUAL_MAX_PWM, MANUAL_MAX_PWM);
+      float max_pwm = config.values.manual_max_pwm;
+      manual_left_pwm = constrain(left, -max_pwm, max_pwm);
+      manual_right_pwm = constrain(right, -max_pwm, max_pwm);
       manual_cmd_ms = now;
       manual_source = source;
     }
@@ -535,8 +609,9 @@ void Controller_c::handleCommand(Robot_c &robot, RobotWifiAP_c &server, const ch
     if(usr_mode == MANUAL_CTRL && isfinite(left) && isfinite(right)) {
       manual_vel = true;
       mover.cancel();
-      left_speed.setTarget(constrain(left, -MANUAL_MAX_SPEED_MM_S, MANUAL_MAX_SPEED_MM_S));
-      right_speed.setTarget(constrain(right, -MANUAL_MAX_SPEED_MM_S, MANUAL_MAX_SPEED_MM_S));
+      float max_speed = config.values.manual_max_speed_mm_s;
+      left_speed.setTarget(constrain(left, -max_speed, max_speed));
+      right_speed.setTarget(constrain(right, -max_speed, max_speed));
       manual_cmd_ms = now;
       manual_source = source;
     }
@@ -545,7 +620,8 @@ void Controller_c::handleCommand(Robot_c &robot, RobotWifiAP_c &server, const ch
     if(usr_mode == MANUAL_CTRL && isfinite(left)) {
       float counts_per_rev = odometry.encoderCountsPerRevolution;
       manual_vel = true;
-      mover.start(constrain(left, -MOVE_MAX_DISTANCE_MM, MOVE_MAX_DISTANCE_MM),
+      float max_mm = config.values.move_max_distance_mm;
+      mover.start(constrain(left, -max_mm, max_mm),
                   robot.getLeftEncoderCount(), robot.getRightEncoderCount(),
                   TWO_PI * odometry.leftWheelRadiusMm / counts_per_rev,
                   TWO_PI * odometry.rightWheelRadiusMm / counts_per_rev, now);
@@ -558,6 +634,10 @@ void Controller_c::handleCommand(Robot_c &robot, RobotWifiAP_c &server, const ch
   }
   else if(strncmp(cmd, "test keepturn", 13) == 0) {
     startKeepTurnTest(robot, server, cmd, source, now);
+  }
+  else if(strncmp(cmd, "set ", 4) == 0 || strncmp(cmd, "get", 3) == 0 || strcmp(cmd, "save") == 0 ||
+          strcmp(cmd, "config reset") == 0 || strcmp(cmd, "id") == 0 || strncmp(cmd, "name ", 5) == 0) {
+    handleConfigCommand(server, cmd, source);
   }
   else if(sscanf(cmd, "ping %lu", &ping_id) == 1) {
     // Answered in the same cycle, so the round trip includes the wait for the

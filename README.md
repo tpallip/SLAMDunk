@@ -75,15 +75,68 @@ For macOS and Windows check the course guide for instructions.
    - **Board:** M5Stack Arduino → **M5StampC3**
    - **USB CDC On Boot:** **Disabled** (otherwise the Serial Monitor shows nothing)
    - **Upload Speed:** 921600, or 115200 if uploads fail
-3. **Set a unique WiFi name and password** on this line of the sketch:
-   ```cpp
-   RobotWifiAP_c server("myAP", "myPassword", 80);
-   ```
-   Every robot running the template broadcasts `myAP` by default, so in a lab
-   you could end up connected to someone else's robot.
-4. Upload, then turn the 3Pi+ on with its power button.
+3. Upload, then turn the 3Pi+ on with its power button.
+
+Every robot runs the same firmware. The robot's name is its WiFi network
+and the id for its config file (see "Robot config" below); the password is
+`lokum123`. A new robot is called `SLAMDunk-` plus the last four hex digits
+of its MAC address (e.g. `SLAMDunk-3FA2`). Give it your own name once, from
+the Serial Monitor or the TUI:
+
+```
+name lokum
+```
+
+then reset the robot. The name is kept in flash, so reflashing doesn't
+change it. The Serial Monitor prints the name at boot, and `id` asks for it.
 
 The Serial Monitor runs at **115200 baud** and shows the same CSV lines as WiFi.
+
+### Robot config
+
+Anything that differs between robots (wheel sizes, motor deadbands,
+feedforward, line threshold) or that you'd want to change for an experiment
+(gains, update and telemetry intervals) is a setting, not a constant in the
+code. The firmware has a default for each, safe on any robot; each robot's
+own values go in `config/<robot id>.json`:
+
+```json
+{
+  "left_breakaway_pwm": 40,
+  "right_breakaway_pwm": 42,
+  "left_run_min_pwm": 19
+}
+```
+
+Only list what's different for your robot. Start from
+`config/example.json`. The full list of keys, their defaults and allowed
+ranges is in `StampC3_Template/RobotConfig.h` and `RobotConfig.cpp`; `get`
+on the robot prints the current values.
+
+When the logger connects it asks the robot for its id, sends that file
+(`config reset`, a `set` per key, then `save`) and checks every value that
+comes back. The robot keeps the saved settings in flash, so it uses them
+without the logger too, e.g. line following off the button. If there's no
+file for the robot, the logger leaves its settings alone.
+`--config FILE` sends a different file and `--no-send-config` sends none.
+
+Commands (from the TUI, teleop or the Serial Monitor):
+
+| Command | Reply | |
+|---|---|---|
+| `id` | `#ID <name>` | |
+| `get` / `get <key>` | `#C <key> <value>` per setting | |
+| `set <key> <value>` | `#C <key> <value>` or `#E ...` | until reboot, unless saved |
+| `save` | `#I config saved` | only writes flash if something changed |
+| `config reset` | `#I config reset ...` | firmware defaults, until saved |
+| `name <new>` | `#I name saved: ...` | robot name and WiFi network, from the next boot |
+
+The safety limits (`manual_max_pwm`, `manual_max_speed_mm_s`,
+`manual_timeout_ms`, `move_max_distance_mm`) can only be lowered. `set` is
+refused while a motor test is running.
+
+Bench test `.json` files record the robot id and all its settings at the time,
+and the analysis scripts take the wheel radius from there.
 
 ### Serial port access (Linux)
 
@@ -181,8 +234,8 @@ the logger. `.venv/` is ignored by git.
 
 ### Connect to the robot
 
-The robot is its own WiFi network. Join it with the name and password you set
-in the sketch. While connected, your computer has no internet over WiFi.
+The robot is its own WiFi network, with the robot's name and password
+`lokum123` (see "Flashing"). While connected, your computer has no internet over WiFi.
 
 You can connect to the the robot like you connect to a normal wifi network, or follow the commands below to connect from terminal.
 
@@ -234,6 +287,7 @@ Settings are constants at the top of `tools/logger.py`:
 | `USE_RERUN` | `True` | `True` | Open the Rerun viewer |
 | `USE_CSV` | `True` | `True` | Save every record to a CSV file (default for `--csv`/`--no-csv`) |
 | `LOG_DIR` | `logs/` | `logs/` | Folder for the CSV files |
+| `CONFIG_DIR` | `config/` | `config/` | Robot config files, `<robot id>.json` |
 
 Then, with the virtual environment active:
 

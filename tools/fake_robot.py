@@ -8,11 +8,15 @@ simulated speed loop), "start" sets signal, and manual mode stops after
 MANUAL_TIMEOUT_MS without a "pwm" or "vel" command. "ping <id>" is answered
 with "#P <id> <t_ms>" and unknown commands with "#E ...", like the firmware.
 "test deadband ..." and "test keepturn ..." run fake versions of the on-robot
-tests (FakeDeadband, FakeKeepTurn).
+tests (FakeDeadband, FakeKeepTurn). "id", "set", "get", "save" and
+"config reset" work like the firmware, with the keys, defaults and ranges read
+from StampC3_Template/RobotConfig.*.
 Run the logger with --host 127.0.0.1 --port 9000.
 """
 import argparse
 import random
+from pathlib import Path
+import re
 import select
 import socket
 import time
@@ -233,6 +237,56 @@ class FakeKeepTurn:
                 f"{self.count['L']},{self.count['R']}")
 
 
+class FakeConfig:
+    ROBOT_ID = "SLAMDunk-FAKE"
+
+    def __init__(self):
+        firmware = Path(__file__).resolve().parent.parent / "StampC3_Template"
+        header = (firmware / "RobotConfig.h").read_text()
+        self.defaults = {k: float(v) for k, v in re.findall(r"float (\w+) = (-?[\d.]+)f?;", header)}
+        source = (firmware / "RobotConfig.cpp").read_text()
+        num = lambda x: self.defaults[x.split(".")[1]] if x.startswith("defaults.") else float(x.rstrip("f"))
+        self.ranges = {k: (num(lo), num(hi)) for k, lo, hi in
+                       re.findall(r'add\("(\w+)", &v\.\w+, ([^,]+), ([^)]+)\)', source)}
+        self.values = dict(self.defaults)
+        self.saved = dict(self.defaults)
+
+    def command(self, command):
+        """Reply lines for a config command, or None if it isn't one."""
+        parts = command.split()
+        if command == "id":
+            return [f"#ID {self.ROBOT_ID}"]
+        if len(parts) == 2 and parts[0] == "name":
+            return [f"#I name saved: {parts[1]} (reboot to use it)"]
+        if command == "get":
+            return [f"#C {k} {self.values[k]:g}" for k in self.ranges]
+        if len(parts) == 2 and parts[0] == "get":
+            if parts[1] not in self.ranges:
+                return [f"#E get: unknown key {parts[1]}"]
+            return [f"#C {parts[1]} {self.values[parts[1]]:g}"]
+        if len(parts) == 3 and parts[0] == "set":
+            key = parts[1]
+            if key not in self.ranges:
+                return [f"#E set: unknown key {key}"]
+            lo, hi = self.ranges[key]
+            try:
+                value = float(parts[2])
+            except ValueError:
+                return ["#E usage: set <key> <value> | get [key] | save | config reset | id"]
+            if not lo <= value <= hi:
+                return [f"#E set: {key} must be {lo:g} to {hi:g}"]
+            self.values[key] = value
+            return [f"#C {key} {value:g}"]
+        if command == "save":
+            changed = self.values != self.saved
+            self.saved = dict(self.values)
+            return [f"#I config {'saved' if changed else 'unchanged, nothing written'}"]
+        if command == "config reset":
+            self.values = dict(self.defaults)
+            return ["#I config reset to defaults (send save to keep it)"]
+        return None
+
+
 def serve(conn, records):
     """Streams records to one client and handles its commands until it leaves."""
     controller = FakeController()
@@ -240,6 +294,7 @@ def serve(conn, records):
     buffer = b""
     last_command = None
     test = None
+    config = FakeConfig()
     i = 0
     while True:
         if test is not None:
@@ -277,6 +332,10 @@ def serve(conn, records):
             for line in lines:
                 command = line.decode("utf-8", errors="replace").strip()
                 parts = command.split()
+                replies = config.command(command)
+                if replies is not None:
+                    conn.sendall("".join(r + "\n" for r in replies).encode())
+                    continue
                 if parts[:2] in (["test", "deadband"], ["test", "keepturn"]):
                     test = FakeDeadband(command) if parts[1] == "deadband" else FakeKeepTurn(command)
                     t_ms = int((time.monotonic() - start) * 1000)

@@ -9,6 +9,7 @@
 #include "MoveController.h"
 #include "DeadbandTest.h"
 #include "KeepTurnTest.h"
+#include "RobotConfig.h"
 
 /**
  * @brief Supplies the nominal line-following controller for the StampC3 example.
@@ -27,72 +28,8 @@ class Controller_c {
      */
     OdometryModel_c odometry;
 
-    /** @brief Fastest interval between controller and I2C acquisition cycles. */
-    static const unsigned long UPDATE_INTERVAL_MS = 10;
-    /** @brief Interval between telemetry records in milliseconds. */
-    static const unsigned long TELEMETRY_INTERVAL_MS = 10;
-    /** @brief Maximum line-search duration before the controller stops. */
-    static const unsigned long RECOVERY_TIMEOUT_MS = 5000;
-    /** @brief Surface-reading threshold used to decide whether a line is present. */
-    static const uint16_t LINE_THRESHOLD = 1400;
-    /** @brief Nominal forward PWM bias for line following. */
-    static constexpr float BASE_PWM = 45.0f;
-    /** @brief Proportional gain applied to the DN2-minus-DN4 surface error. */
-    static constexpr float LINE_FOLLOW_GAIN = 0.01f;
-    /** @brief Left PWM used during the one-direction line-search rotation. */
-    static constexpr float RECOVERY_LEFT_PWM = -35.0f;
-    /** @brief Right PWM used during the one-direction line-search rotation. */
-    static constexpr float RECOVERY_RIGHT_PWM = 35.0f;
-    /** @brief Largest PWM magnitude accepted by the "pwm" command in manual mode. */
-    static constexpr float MANUAL_MAX_PWM = 100.0f;
-    /** @brief Manual mode stops the motors if no "pwm" or "vel" command arrives for this
-     * long, so a dropped WiFi link can't leave the robot driving (the TCP
-     * connection can still look open for minutes after the link is gone).
-     * tools/teleop.py resends the current "pwm" command well within this time.
-     * Zero disables the check. */
-    static const unsigned long MANUAL_TIMEOUT_MS = 500;
-    /** @brief Largest wheel speed accepted by the "vel" command, in mm/s.
-     * About 100 PWM gives 290-320 mm/s on the test robot, so this leaves the PI
-     * some headroom. */
-    static constexpr float MANUAL_MAX_SPEED_MM_S = 250.0f;
-    /** @brief Wheel-speed PI gains, shared by both wheels. Chosen in simulation
-     * to halve the slow-speed wobble of 0.1 / 1.0 with modest start overshoot;
-     * tune on the robot with tools/speed_test.py (README, "Wheel speed control"). */
-    static constexpr float SPEED_KP = 0.3f;
-    static constexpr float SPEED_KI = 3.0f;
-    /** @brief PWM that starts each wheel from rest, used to kick a stuck wheel.
-     * Above the feedforward offsets because a motor needs more to start than to
-     * keep turning (logs/run_20261011_172405.csv: left starts at 25-30, right
-     * 22-25). Zero turns the kick off. */
-    static constexpr float LEFT_BREAKAWAY_PWM = 40.0f;
-    static constexpr float RIGHT_BREAKAWAY_PWM = 42.0f;
-    /** @brief Lowest PWM while a wheel is meant to be turning: about what keeps
-     * it turning once moving (logs/speedtest_v1.csv, on a stand: below ~13 left
-     * and ~9 right the wheels stall). Stops the PI pulling a wheel that has just
-     * lurched free back down until it sticks again. */
-    static constexpr float LEFT_RUN_MIN_PWM = 19.0f;
-    static constexpr float RIGHT_RUN_MIN_PWM = 14.0f;
-    /** @brief Per-wheel feedforward, pwm = offset + speed / slope. Fitted to
-     * logs/run_20261011_172405.csv at 35-100 PWM, so they belong to that robot;
-     * refit for another one. */
-    static constexpr float LEFT_FF_OFFSET_PWM = 17.0f;
-    static constexpr float LEFT_FF_MM_S_PER_PWM = 3.5f;
-    static constexpr float RIGHT_FF_OFFSET_PWM = 12.0f;
-    static constexpr float RIGHT_FF_MM_S_PER_PWM = 3.75f;
-
-    /** @brief "move" command: speed per mm still to go (1/s), and speed limits
-     * in mm/s. MOVE_MIN_SPEED_MM_S keeps the wheels clear of the deadband. */
-    static constexpr float MOVE_KP = 3.0f;
-    static constexpr float MOVE_MAX_SPEED_MM_S = 40.0f;
-    static constexpr float MOVE_MIN_SPEED_MM_S = 15.0f;
-    /** @brief A wheel this close to its target (mm) has arrived; one count is 0.28 mm. */
-    static constexpr float MOVE_TOLERANCE_MM = 0.2f;
-    /** @brief Coasting allowance: wheels stop this many seconds of travel early.
-     * Set from simulation; if moves overshoot on the robot, raise it, if they
-     * stop short, lower it. */
-    static constexpr float MOVE_STOP_LEAD_S = 0.07f;
-    /** @brief Longest distance accepted by one "move" command, mm. */
-    static constexpr float MOVE_MAX_DISTANCE_MM = 500.0f;
+    /** @brief Settings changed with "set <key> <value>"; see RobotConfig.h for defaults. */
+    RobotConfig_c config;
 
     /** @brief Per-wheel speed controllers used by the "vel" and "move" commands. */
     WheelSpeedController_c left_speed;
@@ -106,6 +43,13 @@ class Controller_c {
 
     /** @brief Creates a controller in its waiting state. */
     Controller_c();
+
+    /** @brief Loads the saved config from flash and applies it. Call from setup().
+     * @param id This robot's name, sent back by the "id" command. */
+    void begin(const char *id);
+
+    /** @brief Pushes config.values into the timers, odometry and controllers. */
+    void applyConfig();
 
     /** @brief Clears signal and mode state, returning the controller to waiting.
      * @note This does not reset the task timers or the local odometry estimate.
@@ -179,13 +123,14 @@ class Controller_c {
     TestKind test_kind = DEADBAND_TEST;
     CmdSource test_source = FROM_WIFI;
     unsigned long test_rows = 0;
+    const char *robot_id = "unknown";
     unsigned long enc_us = 0;          // micros() at the last encoder read
     bool enc_ok = false;
     TaskTimer_c update_timer;
     TaskTimer_c telemetry_timer;
     unsigned long recovery_start_ms;
 
-    /** @brief Returns whether cached DN3 is at or above LINE_THRESHOLD. */
+    /** @brief Returns whether cached DN3 is at or above config line_threshold. */
     bool lineDetected(const Robot_c &robot) const;
 
     /** @brief Clears manual PWM and speed targets, without sending a motor command. */
@@ -200,6 +145,8 @@ class Controller_c {
     void beginMotorTest(Robot_c &robot, CmdSource source, TestKind kind);
 
     void runMotorTest(Robot_c &robot, RobotWifiAP_c &server, unsigned long now);
+
+    void handleConfigCommand(RobotWifiAP_c &server, const char *cmd, CmdSource source);
 
     void endMotorTest(Robot_c &robot, RobotWifiAP_c &server, unsigned long now, const char *why);
 
@@ -237,16 +184,20 @@ class Controller_c {
      * @note Commands: "auto" and "manual" switch mode and stop the motors;
      * "start" starts the line follower in auto mode; "stop" stops the motors
      * (and returns auto mode to waiting); "pwm <left> <right>" sets the motor
-     * PWM in manual mode, clamped to MANUAL_MAX_PWM; "vel <left> <right>" sets
-     * wheel speeds in mm/s in manual mode, clamped to MANUAL_MAX_SPEED_MM_S;
+     * PWM in manual mode, clamped to manual_max_pwm; "vel <left> <right>" sets
+     * wheel speeds in mm/s in manual mode, clamped to manual_max_speed_mm_s;
      * "move <mm>" drives that far straight (negative: backwards) in manual
      * mode, then stops; any other motion command or "stop" cancels it.
      * "ping <id>" replies "#P <id> <t_ms>" at once, for measuring the round
      * trip. "test deadband <L|R> [dir min max step repeats rest_ms run_ms]"
      * runs the deadband test, and "test keepturn <L|R> [dir start step_ms
      * repeats spin_ms rest_ms]" the keep-turning test; "stop" or the button
-     * ends either. Unknown commands
-     * get "#E unknown command: ..." and are ignored.
+     * ends either. "id" replies "#ID <name>". "set <key> <value>" changes a
+     * setting until reboot and "get [key]" reads them back, both as "#C <key>
+     * <value>"; "save" keeps the current settings over a reboot and "config
+     * reset" goes back to the firmware defaults. Unknown commands get
+     * "#E unknown command: ..." and are ignored. "name <new>" saves the
+     * robot's name, used for its WiFi network from the next boot.
      */
     void handleCommand(Robot_c &robot, RobotWifiAP_c &server, const char *cmd,
                        CmdSource source, unsigned long now);

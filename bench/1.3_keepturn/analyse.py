@@ -20,7 +20,8 @@ import numpy as np
 
 SLICE_MS = 100
 SPIN_CHECK_MS = 500
-MM_PER_COUNT = 2 * np.pi * 16.0 / 358.3
+COUNTS_PER_REV = 358.3
+DEFAULT_RADIUS_MM = 16.0
 OUT_DIR = Path(__file__).resolve().parent
 
 
@@ -39,7 +40,14 @@ def unwrap_us(values):
     return np.concatenate([[0], np.cumsum(steps)]) + t[0]
 
 
-def trials(rows):
+def mm_per_count(meta, wheel):
+    # radius from the robot's config saved with the test, if the logger recorded it
+    side = "left" if wheel == "L" else "right"
+    radius = meta.get("config", {}).get(f"{side}_wheel_radius_mm", DEFAULT_RADIUS_MM)
+    return 2 * np.pi * radius / COUNTS_PER_REV
+
+
+def trials(rows, meta):
     by_trial = {}
     for r in rows:
         if r["enc_ok"] == "1":
@@ -51,6 +59,7 @@ def trials(rows):
         if len(spin) < 2 or len(ramp) < 2:
             continue
         wheel = group[0]["wheel"]
+        mm = mm_per_count(meta, wheel)
         key = "enc_l" if wheel == "L" else "enc_r"
         sign = 1 if int(spin[0]["pwm"]) >= 0 else -1
 
@@ -63,7 +72,7 @@ def trials(rows):
             if not inside.any() or c[inside].max() == c[inside].min():
                 spin_ok = False
         last = t >= end - SPIN_CHECK_MS
-        spin_speed = (c[last][-1] - c[last][0]) / ((t[last][-1] - t[last][0]) / 1000) * MM_PER_COUNT
+        spin_speed = (c[last][-1] - c[last][0]) / ((t[last][-1] - t[last][0]) / 1000) * mm
 
         counts = sign * np.array([int(r[key]) for r in ramp])
         pwms = np.array([abs(int(r["pwm"])) for r in ramp])
@@ -110,7 +119,7 @@ def plot(path, rows, title):
 def main():
     for path in sys.argv[1:]:
         rows, meta = load(path)
-        trial_rows = trials(rows)
+        trial_rows = trials(rows, meta)
         out = OUT_DIR / Path(path).stem
         out.mkdir(parents=True, exist_ok=True)
         write_csv(out / "trials.csv", trial_rows)

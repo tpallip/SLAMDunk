@@ -21,7 +21,8 @@ import numpy as np
 SUSTAIN_MS = 500
 SLICE_MS = 100
 TWITCH_COUNTS = 3
-MM_PER_COUNT = 2 * np.pi * 16.0 / 358.3
+COUNTS_PER_REV = 358.3
+DEFAULT_RADIUS_MM = 16.0
 OUT_DIR = Path(__file__).resolve().parent
 
 
@@ -40,7 +41,14 @@ def unwrap_us(values):
     return np.concatenate([[0], np.cumsum(steps)]) + t[0]
 
 
-def trials(rows):
+def mm_per_count(meta, wheel):
+    # radius from the robot's config saved with the test, if the logger recorded it
+    side = "left" if wheel == "L" else "right"
+    radius = meta.get("config", {}).get(f"{side}_wheel_radius_mm", DEFAULT_RADIUS_MM)
+    return 2 * np.pi * radius / COUNTS_PER_REV
+
+
+def trials(rows, meta):
     by_trial = {}
     for r in rows:
         by_trial.setdefault(int(r["trial"]), []).append(r)
@@ -50,6 +58,7 @@ def trials(rows):
         if len(run) < 2:
             continue
         wheel = run[0]["wheel"]
+        mm = mm_per_count(meta, wheel)
         pwm = int(run[0]["pwm"])
         sign = 1 if pwm >= 0 else -1
         t_ms = (unwrap_us([r["enc_us"] for r in run]) - int(run[0]["enc_us"])) / 1000
@@ -69,7 +78,7 @@ def trials(rows):
         sustained = all(s >= 1 for s in slices) and moved >= TWITCH_COUNTS
         w_counts = counts[window]
         w_t = t_ms[window]
-        speed = ((w_counts[-1] - w_counts[0]) / ((w_t[-1] - w_t[0]) / 1000) * MM_PER_COUNT
+        speed = ((w_counts[-1] - w_counts[0]) / ((w_t[-1] - w_t[0]) / 1000) * mm
                  if len(w_t) > 1 and w_t[-1] > w_t[0] else 0.0)
         out.append({
             "trial": trial, "repeat": int(run[0]["repeat"]), "wheel": wheel, "pwm": pwm,
@@ -161,7 +170,7 @@ def plot(path, level_rows, trial_rows, title):
 def main():
     for path in sys.argv[1:]:
         rows, meta = load(path)
-        trial_rows = trials(rows)
+        trial_rows = trials(rows, meta)
         level_rows = levels(trial_rows)
         never, always, p50 = threshold(level_rows)
         out = OUT_DIR / Path(path).stem

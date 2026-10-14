@@ -23,13 +23,14 @@ TIMEOUT_S = 3
 USE_RERUN = True          # stream every record to a Rerun viewer
 USE_CSV = True            # save every record to a CSV file in LOG_DIR (--csv/--no-csv)
 LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
+CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"   # <robot id>.json per robot
 USE_TELEOP = True         # accept commands from tools/teleop.py (--teleop/--no-teleop)
 TELEOP_HOST = "127.0.0.1" # local only, so nobody else on the network can drive the robot
 TELEOP_PORT = 9100
 MAX_PENDING_PINGS = 1000  # forwarded pings still waiting for the robot's "#P" answer
 HEADING_ARROW_MM = 30     # length of the heading arrow drawn at the robot
 SURFACE_MAX = 2942        # highest surface reading (black, or robot lifted)
-LINE_THRESHOLD = 1400     # Controller_c::LINE_THRESHOLD, drawn on the profile
+LINE_THRESHOLD = 1400     # firmware default line_threshold, drawn on the profile
 PROFILE_HEIGHT = 4        # drawn height of SURFACE_MAX; sensors are 1 unit apart
 
 # Field order sent by Controller_c::publishTelemetry (see Controller.h).
@@ -158,26 +159,127 @@ def surface_height(reading):
     return reading / SURFACE_MAX * PROFILE_HEIGHT
 
 
-def log_surface_frame():
+def log_surface_frame(line_threshold=LINE_THRESHOLD):
     """Static outline and threshold line that fix the profile view's scale."""
     top = -PROFILE_HEIGHT
     rr.log("surface/profile/frame", rr.LineStrips2D(
         [[[0.5, 0], [5.5, 0], [5.5, top], [0.5, top], [0.5, 0]]],
         colors=[[128, 128, 128]],
     ), static=True)
-    threshold = -surface_height(LINE_THRESHOLD)
+    threshold = -surface_height(line_threshold)
     rr.log("surface/profile/threshold", rr.LineStrips2D(
         [[[0.5, threshold], [5.5, threshold]]],
         colors=[[255, 80, 80]],
-        labels=[f"line threshold {LINE_THRESHOLD}"],
+        labels=[f"line threshold {line_threshold:g}"],
     ), static=True)
+
+
+class RobotConfig:
+    """Sends the robot its config file when the logger connects.
+
+    The logger sends "id". When "#ID <name>" comes back it loads
+    config/<name>.json (or --config), and sends "config reset", one
+    "set <key> <value>" per entry, "save" and "get". The robot answers
+    in order, so each "#C"/"#E" reply is matched to the next key sent. A
+    second "id" after the "get" marks the end of the robot's list of values.
+    values holds every "#C <key> <value>" seen, so it is what the robot
+    is actually using.
+    """
+
+    def __init__(self, path=None, enabled=True):
+        self.path = path
+        self.enabled = enabled
+        self.robot_id = None
+        self.values = {}
+        self.pending = []      # keys sent with "set", waiting for their reply
+        self.expected = {}
+        self.syncing = False   # from "#ID" until the second "#ID"
+        self.problems = 0
+
+    def start(self, sock):
+        if self.enabled:
+            sock.sendall(b"id\n")
+
+    def load(self):
+        path = self.path or CONFIG_DIR / f"{self.robot_id}.json"
+        if not Path(path).exists():
+            log.warning("no %s: %s keeps its saved settings (or the firmware defaults)", path, self.robot_id)
+            return None
+        try:
+            data = json.loads(Path(path).read_text())
+        except (OSError, json.JSONDecodeError) as e:
+            log.error("can't read %s: %s; config not sent", path, e)
+            return None
+        settings = {}
+        for key, value in data.items():
+            if key.startswith("_"):
+                continue   # "_comment" and similar
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                log.warning("%s: %s is not a number, skipped", path, key)
+                continue
+            settings[key] = value
+        log.info("sending %d settings from %s", len(settings), path)
+        return settings
+
+    def handle(self, line, sock):
+        """Acts on a robot reply; returns True if it shouldn't be printed."""
+        text = line.decode("utf-8", errors="replace")
+        parts = text.split()
+        if parts[:1] == ["#ID"] and len(parts) == 2:
+            if self.syncing:
+                self.finish()
+                return True
+            self.robot_id = parts[1]
+            log.info("connected to %s", self.robot_id)
+            settings = self.load() if self.enabled else None
+            commands = []
+            if settings is not None:
+                self.pending = list(settings)
+                self.expected = settings
+                commands = ["config reset"] + [f"set {k} {v}" for k, v in settings.items()] + ["save"]
+            commands += ["get", "id"]
+            self.syncing = True
+            sock.sendall("".join(c + "\n" for c in commands).encode())
+            return True
+        if parts[:1] == ["#C"] and len(parts) == 3:
+            try:
+                self.values[parts[1]] = float(parts[2])
+            except ValueError:
+                pass
+            if self.pending and parts[1] == self.pending[0]:
+                key = self.pending.pop(0)
+                if not math.isclose(self.values[key], self.expected[key], rel_tol=1e-5, abs_tol=1e-6):
+                    log.warning("config: %s is %s on the robot, file says %s", key, parts[2], self.expected[key])
+                    self.problems += 1
+            return self.syncing
+        if self.syncing and text.startswith("#E") and self.pending:
+            key = self.pending.pop(0)
+            log.error("config: %s not set: %s", key, text)
+            self.problems += 1
+            return True
+        if self.syncing and text.startswith("#I config"):
+            log.info("robot: %s", text)
+            return True
+        return False
+
+    def finish(self):
+        self.syncing = False
+        if self.pending:
+            log.error("config: no reply for %s", ", ".join(self.pending))
+            self.problems += len(self.pending)
+            self.pending = []
+        log.info("%s is using %d settings%s", self.robot_id, len(self.values),
+                 f", {self.problems} problem(s) above" if self.problems else "")
+        if USE_RERUN and "line_threshold" in self.values:
+            log_surface_frame(self.values["line_threshold"])
 
 
 class BenchRecorder:
     """Writes each on-robot test (#BH, #BC, #B rows, #BE) to logs/bench_<test>_<time>.csv + .json"""
 
-    def __init__(self, log_dir):
+    def __init__(self, log_dir, robot_config=None):
         self.log_dir = log_dir
+        self.robot_config = robot_config
         self.file = None
         self.meta = None
         self.rows = 0
@@ -198,6 +300,9 @@ class BenchRecorder:
             self.path = self.log_dir / f"{stem}.csv"
             self.meta = {"test": test, "header": text, "started": datetime.now().isoformat(timespec="seconds"),
                          "params": dict(p.split("=", 1) for p in parts[2:] if "=" in p)}
+            if self.robot_config is not None:
+                self.meta["robot"] = self.robot_config.robot_id
+                self.meta["config"] = dict(self.robot_config.values)
             self.file = open(self.path, "w", buffering=1)
             self.rows = 0
             log.info("test %s started: saving rows to %s", test, self.path)
@@ -353,6 +458,14 @@ def parse_args():
         "--teleop", action=argparse.BooleanOptionalAction, default=USE_TELEOP,
         help=f"accept commands from tools/teleop.py on {TELEOP_HOST}:{TELEOP_PORT}",
     )
+    parser.add_argument(
+        "--config", metavar="FILE", type=Path,
+        help=f"settings to send on connect (default: {CONFIG_DIR.name}/<robot id>.json)",
+    )
+    parser.add_argument(
+        "--send-config", action=argparse.BooleanOptionalAction, default=True,
+        help="send the config file when connecting (--no-send-config leaves the robot as it is)",
+    )
     return parser.parse_args()
 
 
@@ -408,7 +521,12 @@ def main():
     latest = None
     csv_writer = None
     teleop = None
-    bench = BenchRecorder(LOG_DIR)
+    robot_config = RobotConfig(args.config, args.send_config)
+    bench = BenchRecorder(LOG_DIR, robot_config)
+    try:
+        robot_config.start(sock)
+    except OSError as e:
+        log.error("couldn't ask the robot for its id: %s", e)
 
     if args.teleop:
         try:
@@ -492,7 +610,12 @@ def main():
                     # A reply to a command, not a telemetry record.
                     if teleop is not None:
                         teleop.robot_reply(line, received_at)
-                    if not bench.handle(line) and not line.startswith(b"#P"):
+                    try:
+                        quiet = robot_config.handle(line, sock)
+                    except OSError as e:
+                        log.error("couldn't send config to robot: %s", e)
+                        quiet = False
+                    if not quiet and not bench.handle(line) and not line.startswith(b"#P"):
                         log.info("robot: %s", line.decode("utf-8", errors="replace"))
                     continue
                 text = line.decode("utf-8", errors="replace")
