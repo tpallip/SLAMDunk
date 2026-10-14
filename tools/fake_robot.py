@@ -7,7 +7,8 @@ manual mode ("vel" sets them to the firmware's feedforward PWM; there is no
 simulated speed loop), "start" sets signal, and manual mode stops after
 MANUAL_TIMEOUT_MS without a "pwm" or "vel" command. "ping <id>" is answered
 with "#P <id> <t_ms>" and unknown commands with "#E ...", like the firmware.
-"test deadband ..." runs a fake deadband test (see FakeDeadband).
+"test deadband ..." and "test keepturn ..." run fake versions of the on-robot
+tests (FakeDeadband, FakeKeepTurn).
 Run the logger with --host 127.0.0.1 --port 9000.
 """
 import argparse
@@ -126,6 +127,7 @@ class FakeDeadband:
         defaults = ["L", "1", "0", "60", "5", "3", "1500", "1500"]
         args = args + defaults[len(args):]
         self.wheel = args[0].upper()
+        self.name = "deadband"
         self.dir, self.lo, self.hi, self.pwm_step, self.repeats, self.rest_ms, self.run_ms = (int(a) for a in args[1:8])
         self.trial, self.repeat, self.level = 0, 1, self.lo
         self.count = {"L": 0, "R": 0}
@@ -178,6 +180,59 @@ class FakeDeadband:
                 f"{self.count['L']},{self.count['R']},{self.rest_ok if self.phase == 'run' else 0}")
 
 
+class FakeKeepTurn:
+    """Same phases as KeepTurnTest_c with a made up wheel, one step per 10 ms."""
+    STILL_MS, STOP_PWM = 300, {"L": 15, "R": 11}
+
+    def __init__(self, command):
+        args = command.split()[2:]
+        defaults = ["L", "1", "50", "200", "5", "1000", "1500"]
+        args = args + defaults[len(args):]
+        self.wheel = args[0].upper()
+        self.dir, self.start_pwm, self.step_ms, self.trials, self.spin_ms, self.rest_ms = (int(a) for a in args[1:7])
+        self.name = "keepturn"
+        self.trial, self.t, self.rows, self.last_move = 0, 0, 0, 0
+        self.count = {"L": 0, "R": 0}
+        self.begin_rest()
+
+    def begin_rest(self):
+        self.trial += 1
+        self.phase, self.phase_start, self.level = "rest", self.t, self.start_pwm
+        self.stop_at = self.STOP_PWM[self.wheel] + random.choice([-1, 0, 0, 1])
+
+    def header(self, t_ms):
+        self.t = self.phase_start = self.last_move = t_ms
+        return [f"#BH keepturn wheel={self.wheel} dir={self.dir} start={self.start_pwm} step_ms={self.step_ms} "
+                f"repeats={self.trials} spin_ms={self.spin_ms} rest_ms={self.rest_ms} still_ms={self.STILL_MS} "
+                f"trials={self.trials}",
+                "#BC trial,phase,wheel,pwm,t_ms,enc_us,enc_ok,enc_l,enc_r"]
+
+    def step(self):
+        self.t += 10
+        still = self.t - self.last_move >= self.STILL_MS
+        if self.phase == "rest":
+            if self.t - self.phase_start >= self.rest_ms and still:
+                self.phase, self.phase_start = "spin", self.t
+        elif self.phase == "spin":
+            if self.t - self.phase_start >= self.spin_ms:
+                self.phase, self.phase_start, self.last_step = "ramp", self.t, self.t
+        elif still or self.level <= 0:
+            if self.trial >= self.trials:
+                return f"#BE keepturn done rows={self.rows} trials={self.trial}"
+            self.begin_rest()
+        elif self.t - self.last_step >= self.step_ms:
+            self.level -= 1
+            self.last_step += self.step_ms
+        pwm = self.dir * self.level if self.phase in ("spin", "ramp") else 0
+        if pwm and self.level >= self.stop_at:
+            if int((self.level - 12) * 0.13 + random.random()):
+                self.count[self.wheel] += self.dir
+                self.last_move = self.t
+        self.rows += 1
+        return (f"#B,{self.trial},{self.phase},{self.wheel},{pwm},{self.t},{self.t * 1000 + 3000},1,"
+                f"{self.count['L']},{self.count['R']}")
+
+
 def serve(conn, records):
     """Streams records to one client and handles its commands until it leaves."""
     controller = FakeController()
@@ -222,14 +277,14 @@ def serve(conn, records):
             for line in lines:
                 command = line.decode("utf-8", errors="replace").strip()
                 parts = command.split()
-                if parts[:2] == ["test", "deadband"]:
-                    test = FakeDeadband(command)
+                if parts[:2] in (["test", "deadband"], ["test", "keepturn"]):
+                    test = FakeDeadband(command) if parts[1] == "deadband" else FakeKeepTurn(command)
                     t_ms = int((time.monotonic() - start) * 1000)
                     conn.sendall(("\n".join(test.header(t_ms)) + "\n").encode())
-                    print(f"robot got {command!r} -> simulated deadband test, {test.trials} trials")
+                    print(f"robot got {command!r} -> fake {parts[1]} test, {test.trials} trials")
                     continue
                 if command == "stop" and test is not None:
-                    conn.sendall(b"#BE deadband stop rows=0 trials=0\n")
+                    conn.sendall(f"#BE {test.name} stop rows=0 trials=0\n".encode())
                     test = None
                 if len(parts) == 2 and parts[0] == "ping" and parts[1].isdigit():
                     t_ms = int((time.monotonic() - start) * 1000)

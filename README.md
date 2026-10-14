@@ -527,6 +527,23 @@ python3 bench/1.2_deadband/analyse.py logs/bench_deadband_<time>.csv
 Results go in `bench/1.2_deadband/<csv name>/`. `tools/fake_robot.py` can
 fake this test if you want to try it without the robot.
 
+#### Keep-turning test
+
+```
+test keepturn <L|R> [dir start step_ms repeats spin_ms rest_ms]
+```
+
+Defaults are `1 50 200 5 1000 1500`. The wheel spins at `start` for
+`spin_ms`, then the PWM drops by 1 every `step_ms` until the wheel stops (no
+count for 300 ms). The PWM at the last count is how low it can go and keep
+turning.
+
+Columns: `trial, phase, wheel, pwm, t_ms, enc_us, enc_ok, enc_l, enc_r`.
+
+```bash
+python3 bench/1.3_keepturn/analyse.py logs/bench_keepturn_<time>.csv
+```
+
 ### Wheel speed control (`vel`)
 
 `WheelSpeedController_c` (`StampC3_Template/WheelSpeedController.h`) holds one

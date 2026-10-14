@@ -1,0 +1,14 @@
+keepturn R dir 1 (bench_keepturn_20261014_013814.csv)
+end: #BE keepturn done rows=5154 trials=5
+ramp: 1 PWM every 200 ms from 50
+trials: 5, used: 5 (skipped if not moving at the end of the spin)
+
+trial  spin ok  spin speed mm/s  stop pwm
+    1      yes            173.0        12
+    2      yes            171.8        13
+    3      yes            170.9        13
+    4      yes            171.4        12
+    5      yes            171.2        12
+
+stop pwm: median 12, min 12, max 13
+plot skipped (ImportError: Matplotlib requires numpy>=1.23; you have 1.21.5)

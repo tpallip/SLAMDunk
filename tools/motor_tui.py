@@ -76,6 +76,9 @@ HELP = """\
                    on-robot deadband test (defaults 1 0 60 5 3 1500 1500);
                    the logger saves its rows to logs/bench_deadband_<time>.csv;
                    stop, the StampC3 button or quit ends it early
+  test keepturn <L|R> [dir start step_ms repeats spin_ms rest_ms]
+                   keep-turning test (defaults 1 50 200 5 1000 1500): spin,
+                   then drop the PWM by 1 every step_ms until the wheel stops
 [b]Other[/b]
   help, clear, quit (or q, Ctrl+C: stops the motors first)
   anything else is sent to the robot as typed, e.g. manual, auto, start,
@@ -316,12 +319,13 @@ class MotorTui(App):
         elif text.startswith("#B,"):
             self.on_test_row(text)
         elif text.startswith("#BC"):
-            pass
+            if self.test is not None:
+                self.test["columns"] = text[4:].split(",")
         elif text.startswith("#"):
             if text.startswith("#BH"):
                 self.test = {"name": text.split()[1] if len(text.split()) > 1 else "test",
                              "trials": next((kv.split("=")[1] for kv in text.split() if kv.startswith("trials=")), "?"),
-                             "rows": 0, "row": None}
+                             "rows": 0, "row": None, "columns": []}
             elif text.startswith("#BE"):
                 self.test = None
             self.say(f"[cyan]robot[/cyan] {escape(text)}")
@@ -609,9 +613,12 @@ class MotorTui(App):
         if self.ping_run is not None:
             lines.append(f"[b]ping test[/b]   {self.ping_run.sent}/{self.ping_run.count} sent")
         if self.test is not None:
-            row = self.test["row"]
-            where = (f"trial {row[0]}/{self.test['trials']} sweep {row[1]} {row[2]} {row[3]} pwm {row[4]}"
-                     if row and len(row) > 4 else "starting")
+            row = dict(zip(self.test["columns"], self.test["row"] or []))
+            if row:
+                where = f"trial {row.get('trial', '?')}/{self.test['trials']} {row.get('phase', '')} " \
+                        f"{row.get('wheel', '')} pwm {row.get('pwm', '?')}"
+            else:
+                where = "starting"
             lines.append(f"[b]test {escape(self.test['name'])}[/b] {escape(where)}, {self.test['rows']} rows")
         return "\n".join(lines)
 

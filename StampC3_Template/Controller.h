@@ -8,6 +8,7 @@
 #include "WheelSpeedController.h"
 #include "MoveController.h"
 #include "DeadbandTest.h"
+#include "KeepTurnTest.h"
 
 /**
  * @brief Supplies the nominal line-following controller for the StampC3 example.
@@ -69,8 +70,8 @@ class Controller_c {
      * it turning once moving (logs/speedtest_v1.csv, on a stand: below ~13 left
      * and ~9 right the wheels stall). Stops the PI pulling a wheel that has just
      * lurched free back down until it sticks again. */
-    static constexpr float LEFT_RUN_MIN_PWM = 13.0f;
-    static constexpr float RIGHT_RUN_MIN_PWM = 9.0f;
+    static constexpr float LEFT_RUN_MIN_PWM = 19.0f;
+    static constexpr float RIGHT_RUN_MIN_PWM = 14.0f;
     /** @brief Per-wheel feedforward, pwm = offset + speed / slope. Fitted to
      * logs/run_20261011_172405.csv at 35-100 PWM, so they belong to that robot;
      * refit for another one. */
@@ -100,6 +101,8 @@ class Controller_c {
     MoveController_c mover;
     /** @brief "test deadband" command. */
     DeadbandTest_c deadband;
+    /** @brief "test keepturn" command. */
+    KeepTurnTest_c keepturn;
 
     /** @brief Creates a controller in its waiting state. */
     Controller_c();
@@ -172,6 +175,8 @@ class Controller_c {
     unsigned long manual_cmd_ms = 0;   // time of the last "pwm" or "vel" command
     bool manual_vel = false;           // true: "vel" speed control; false: raw "pwm"
     unsigned long last_manual_ms = 0;  // previous manual-mode cycle, for the PI's dt
+    enum TestKind { DEADBAND_TEST, KEEPTURN_TEST };
+    TestKind test_kind = DEADBAND_TEST;
     CmdSource test_source = FROM_WIFI;
     unsigned long test_rows = 0;
     unsigned long enc_us = 0;          // micros() at the last encoder read
@@ -188,6 +193,11 @@ class Controller_c {
 
     void startDeadbandTest(Robot_c &robot, RobotWifiAP_c &server, const char *cmd,
                            CmdSource source, unsigned long now);
+
+    void startKeepTurnTest(Robot_c &robot, RobotWifiAP_c &server, const char *cmd,
+                           CmdSource source, unsigned long now);
+
+    void beginMotorTest(Robot_c &robot, CmdSource source, TestKind kind);
 
     void runMotorTest(Robot_c &robot, RobotWifiAP_c &server, unsigned long now);
 
@@ -233,7 +243,9 @@ class Controller_c {
      * mode, then stops; any other motion command or "stop" cancels it.
      * "ping <id>" replies "#P <id> <t_ms>" at once, for measuring the round
      * trip. "test deadband <L|R> [dir min max step repeats rest_ms run_ms]"
-     * runs the deadband test; "stop" or the button ends it. Unknown commands
+     * runs the deadband test, and "test keepturn <L|R> [dir start step_ms
+     * repeats spin_ms rest_ms]" the keep-turning test; "stop" or the button
+     * ends either. Unknown commands
      * get "#E unknown command: ..." and are ignored.
      */
     void handleCommand(Robot_c &robot, RobotWifiAP_c &server, const char *cmd,

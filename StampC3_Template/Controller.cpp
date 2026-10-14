@@ -214,17 +214,49 @@ void Controller_c::startDeadbandTest(Robot_c &robot, RobotWifiAP_c &server, cons
     return;
   }
 
-  setSignal(0);
-  clearManual();
-  robot.setMotorPWM(0, 0);
-  usr_mode = MOTOR_TEST;
-  test_source = source;
-  test_rows = 0;
+  beginMotorTest(robot, source, DEADBAND_TEST);
   reply(server, source, "#BH deadband wheel=%c dir=%d min=%d max=%d step=%d repeats=%d "
         "rest_ms=%lu run_ms=%lu still_ms=%lu trials=%d\n",
         p.wheel, p.dir, p.pwm_min, p.pwm_max, p.pwm_step, p.repeats, p.rest_ms, p.run_ms,
         DeadbandTest_c::STILL_MS, p.repeats * deadband.levelsPerSweep());
   reply(server, source, "#BC trial,repeat,phase,wheel,pwm,t_ms,enc_us,enc_ok,enc_l,enc_r,rest_ok\n");
+}
+
+void Controller_c::startKeepTurnTest(Robot_c &robot, RobotWifiAP_c &server, const char *cmd,
+                                     CmdSource source, unsigned long now) {
+  KeepTurnTest_c::Params p;
+  int step_ms = (int)p.step_ms, spin_ms = (int)p.spin_ms, rest_ms = (int)p.rest_ms;
+  if(sscanf(cmd, "test keepturn %c %d %d %d %d %d %d", &p.wheel, &p.dir, &p.start_pwm,
+            &step_ms, &p.repeats, &spin_ms, &rest_ms) < 1) {
+    reply(server, source, "#E usage: test keepturn <L|R> [dir start step_ms repeats spin_ms rest_ms]\n");
+    return;
+  }
+  p.step_ms = step_ms < 0 ? 0 : step_ms;
+  p.spin_ms = spin_ms < 0 ? 0 : spin_ms;
+  p.rest_ms = rest_ms < 0 ? 0 : rest_ms;
+  int32_t count = p.wheel == 'L' ? robot.getLeftEncoderCount() : robot.getRightEncoderCount();
+  const char *problem = keepturn.start(p, now, count);
+  if(problem != nullptr) {
+    reply(server, source, "#E test keepturn: %s\n", problem);
+    return;
+  }
+
+  beginMotorTest(robot, source, KEEPTURN_TEST);
+  reply(server, source, "#BH keepturn wheel=%c dir=%d start=%d step_ms=%lu repeats=%d "
+        "spin_ms=%lu rest_ms=%lu still_ms=%lu trials=%d\n",
+        p.wheel, p.dir, p.start_pwm, p.step_ms, p.repeats, p.spin_ms, p.rest_ms,
+        KeepTurnTest_c::STILL_MS, p.repeats);
+  reply(server, source, "#BC trial,phase,wheel,pwm,t_ms,enc_us,enc_ok,enc_l,enc_r\n");
+}
+
+void Controller_c::beginMotorTest(Robot_c &robot, CmdSource source, TestKind kind) {
+  setSignal(0);
+  clearManual();
+  robot.setMotorPWM(0, 0);
+  usr_mode = MOTOR_TEST;
+  test_kind = kind;
+  test_source = source;
+  test_rows = 0;
 }
 
 void Controller_c::runMotorTest(Robot_c &robot, RobotWifiAP_c &server, unsigned long now) {
@@ -238,9 +270,27 @@ void Controller_c::runMotorTest(Robot_c &robot, RobotWifiAP_c &server, unsigned 
     return;
   }
 
+  long enc_l = robot.getLeftEncoderCount();
+  long enc_r = robot.getRightEncoderCount();
+
+  if(test_kind == KEEPTURN_TEST) {
+    const KeepTurnTest_c::Params &p = keepturn.getParams();
+    keepturn.update(now, p.wheel == 'L' ? enc_l : enc_r);
+    if(!keepturn.active()) {
+      endMotorTest(robot, server, now, "done");
+      return;
+    }
+    int pwm = keepturn.getPwm();
+    robot.setMotorPWM(p.wheel == 'L' ? pwm : 0, p.wheel == 'R' ? pwm : 0);
+    reply(server, test_source, "#B,%d,%s,%c,%d,%lu,%lu,%d,%ld,%ld\n",
+          keepturn.getTrial(), keepturn.getPhaseName(), p.wheel, pwm, now, enc_us,
+          enc_ok ? 1 : 0, enc_l, enc_r);
+    test_rows++;
+    return;
+  }
+
   const DeadbandTest_c::Params &p = deadband.getParams();
-  int32_t count = p.wheel == 'L' ? robot.getLeftEncoderCount() : robot.getRightEncoderCount();
-  deadband.update(now, count);
+  deadband.update(now, p.wheel == 'L' ? enc_l : enc_r);
   if(!deadband.active()) {
     endMotorTest(robot, server, now, "done");
     return;
@@ -251,19 +301,21 @@ void Controller_c::runMotorTest(Robot_c &robot, RobotWifiAP_c &server, unsigned 
   bool running = deadband.getPhase() == DeadbandTest_c::RUN;
   reply(server, test_source, "#B,%d,%d,%s,%c,%d,%lu,%lu,%d,%ld,%ld,%d\n",
         deadband.getTrial(), deadband.getRepeat(), running ? "run" : "rest", p.wheel, pwm,
-        now, enc_us, enc_ok ? 1 : 0, (long)robot.getLeftEncoderCount(),
-        (long)robot.getRightEncoderCount(), running && deadband.getRestOk() ? 1 : 0);
+        now, enc_us, enc_ok ? 1 : 0, enc_l, enc_r, running && deadband.getRestOk() ? 1 : 0);
   test_rows++;
 }
 
 void Controller_c::endMotorTest(Robot_c &robot, RobotWifiAP_c &server, unsigned long now,
                                 const char *why) {
-  if(deadband.active()) {
+  bool keep = test_kind == KEEPTURN_TEST;
+  if(keep) {
+    keepturn.abort();
+  } else if(deadband.active()) {
     deadband.abort();
   }
   robot.setMotorPWM(0, 0);
-  reply(server, test_source, "#BE deadband %s rows=%lu trials=%d\n", why, test_rows,
-        deadband.getTrial());
+  reply(server, test_source, "#BE %s %s rows=%lu trials=%d\n", keep ? "keepturn" : "deadband",
+        why, test_rows, keep ? keepturn.getTrial() : deadband.getTrial());
   usr_mode = MANUAL_CTRL;
   manual_vel = false;
   clearManual();
@@ -503,6 +555,9 @@ void Controller_c::handleCommand(Robot_c &robot, RobotWifiAP_c &server, const ch
   }
   else if(strncmp(cmd, "test deadband", 13) == 0) {
     startDeadbandTest(robot, server, cmd, source, now);
+  }
+  else if(strncmp(cmd, "test keepturn", 13) == 0) {
+    startKeepTurnTest(robot, server, cmd, source, now);
   }
   else if(sscanf(cmd, "ping %lu", &ping_id) == 1) {
     // Answered in the same cycle, so the round trip includes the wait for the
