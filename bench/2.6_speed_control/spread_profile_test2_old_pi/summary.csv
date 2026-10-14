@@ -1,3 +1,0 @@
-target,wheel,duration_s,mean,error_pct,sd,sd_pct,p5,p95,stuck_pct,rise_ms,overshoot_pct,pwm_mean,pwm_sd,spin
-30.000,left,46.084,32.521,8.402,13.323,44.409,0.000,49.880,9.006,390.000,2.878,28.001,2.697,True
-30.000,right,46.084,32.424,8.079,13.054,43.514,0.000,47.698,8.366,280.000,21.584,21.837,2.557,True
