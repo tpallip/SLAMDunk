@@ -1,0 +1,33 @@
+gain R (spin) dir 1 (bench_gain_20261014_202947.csv)
+end: #BE gain done rows=15087 trials=3
+settle 500 ms, hold 1000 ms; holds: 99, stalled: 1
+
+ PWM  holds  speed mm/s   sd   down     up   ripple sd
+ -20      3        12.9  15.5   12.9      -        2.9
+ -25      5        49.3   2.5   48.4   50.6        3.7   1 stalled
+ -30      6        70.2   1.8   69.1   71.2        4.4
+ -35      6        90.9   1.4   91.6   90.2        3.2
+ -40      6       109.7   2.4  109.2  110.3        3.2
+ -45      6       129.3   0.6  129.7  128.8        3.9
+ -50      6       147.8   1.6  147.4  148.1        2.7
+ -55      6       167.1   2.1  166.5  167.7        3.6
+ -60      6       186.5   1.6  186.2  186.8        3.4
+ -65      6       201.7   1.6  201.2  202.2        3.1
+ -70      6       220.4   1.7  219.9  221.0        3.2
+ -75      6       239.8   1.7  238.9  240.7        3.7
+ -80      6       259.4   1.8  258.7  260.1        3.2
+ -85      6       279.1   1.9  278.6  279.5        3.3
+ -90      6       297.6   7.2  299.6  295.7        3.5
+ -95      6       314.6   2.5  313.4  315.9        2.9
+-100      6       334.8   2.2  334.1  335.5        2.9
+
+linear fit: speed = 3.811 * pwm -45.1 mm/s, rms residual 4.9 mm/s
+held back PWM [30, 50, 70, 90]: mean error linear 2.8 mm/s, quadratic 3.2 mm/s
+slope between levels: median 3.88, top step 4.03 mm/s per PWM (104% of median)
+down vs up: largest difference +3.9 mm/s at -90
+speed at 100 PWM by trial: 334.0, 335.3, 335.0
+
+suggested config:
+  "right_ff_offset_pwm": 11.8,
+  "right_ff_mm_s_per_pwm": 3.81
+plot skipped (ImportError: Matplotlib requires numpy>=1.23; you have 1.21.5)

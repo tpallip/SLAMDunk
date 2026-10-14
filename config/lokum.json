@@ -5,12 +5,12 @@
 
   "left_breakaway_pwm": 40,
   "right_breakaway_pwm": 42,
-  "left_run_min_pwm": 19,
-  "right_run_min_pwm": 14,
-  "left_ff_offset_pwm": 11.1,
-  "left_ff_mm_s_per_pwm": 3.51,
-  "right_ff_offset_pwm": 5.0,
-  "right_ff_mm_s_per_pwm": 3.79,
+  "left_run_min_pwm": 28,
+  "right_run_min_pwm": 21,
+  "left_ff_offset_pwm": 19.2,
+  "left_ff_mm_s_per_pwm": 3.60,
+  "right_ff_offset_pwm": 10.7,
+  "right_ff_mm_s_per_pwm": 3.75,
 
   "speed_kp": 0.3,
   "speed_ki": 3.0,
