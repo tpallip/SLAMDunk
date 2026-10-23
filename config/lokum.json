@@ -18,7 +18,7 @@
 
   "move_min_speed_mm_s": 40,
   "move_max_speed_mm_s": 60,
-  "move_stop_lead_s": 0.07,
+  "move_stop_lead_s": 0.045,
   "line_threshold": 1400,
 
   "update_interval_ms": 10,
