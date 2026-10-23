@@ -19,8 +19,16 @@ Commands (sent to the robot through logger.py):
                      the robot holds each wheel at its speed (max 250)
   pwm <left> <right> set raw motor PWM in manual mode, e.g. pwm 40 40, pwm -30 30
                      (vel and pwm are resent every 0.2 s until the next command)
-  move <mm>          drive that far straight in manual mode, then stop,
-                     e.g. move 10, move -10 (sent once; finishes by itself)
+  forward <mm> [speed]  drive that far straight, then stop, e.g. forward 200
+  back <mm> [speed]     the same backwards, e.g. back 50
+  twist <deg> [speed]   turn on the spot, + anticlockwise, e.g. twist 90, twist -45
+  left <deg> [speed]    turn anticlockwise, e.g. left 90 (same as twist 90)
+  right <deg> [speed]   turn clockwise, e.g. right 90 (same as twist -90)
+                     (manual mode; sent once as move/turn and finish by themselves;
+                     speed in mm/s per wheel, default move_max_speed_mm_s;
+                     the robot replies "#I move done" / "#I turn done")
+  move <mm> [speed]  the robot's own command behind forward/back
+  turn <deg> [speed] the robot's own command behind twist/left/right
   stop               stop the motors (auto mode: back to waiting)
   auto               back to the line follower, waiting for start
   start              start the line follower (auto mode)
@@ -76,6 +84,41 @@ def is_moving(command):
         return float(parts[1]) != 0 or float(parts[2]) != 0
     except ValueError:
         return False
+
+
+# TurtleBot-style motion verbs, sent to the robot as its own "move"/"turn"
+# with the distance or angle multiplied by the sign.
+MOTION_VERBS = {
+    "forward": ("move", 1), "fwd": ("move", 1), "f": ("move", 1),
+    "back": ("move", -1), "backward": ("move", -1), "b": ("move", -1),
+    "twist": ("turn", 1),
+    "left": ("turn", 1), "l": ("turn", 1),
+    "right": ("turn", -1), "r": ("turn", -1),
+}
+
+
+def translate(command):
+    """Turns a motion verb into the robot's command, e.g. "right 90" -> "turn -90".
+
+    Returns the command unchanged if it isn't a motion verb, or raises
+    ValueError with a message for the user if its numbers don't parse.
+    """
+    parts = command.split()
+    if parts[0] not in MOTION_VERBS:
+        return command
+    robot_cmd, sign = MOTION_VERBS[parts[0]]
+    unit = "mm" if robot_cmd == "move" else "deg"
+    if len(parts) not in (2, 3):
+        raise ValueError(f"usage: {parts[0]} <{unit}> [speed]")
+    try:
+        amount = float(parts[1])
+        speed = float(parts[2]) if len(parts) == 3 else None
+    except ValueError:
+        raise ValueError(f"usage: {parts[0]} <{unit}> [speed]") from None
+    out = f"{robot_cmd} {sign * amount:g}"
+    if speed is not None:
+        out += f" {speed:g}"
+    return out
 
 
 def print_from_logger(sock):
@@ -136,6 +179,11 @@ def main():
                 continue
             if command == "quit":
                 break
+            try:
+                command = translate(command)
+            except ValueError as e:
+                print(f"{e}. Not sent.")
+                continue
             if len(command) > MAX_COMMAND_LEN:
                 print(f"too long ({len(command)} chars); the robot keeps {MAX_COMMAND_LEN}. Not sent.")
                 continue

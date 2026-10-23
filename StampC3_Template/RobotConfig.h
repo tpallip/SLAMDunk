@@ -33,6 +33,7 @@ struct RobotConfigValues_t {
   float speed_window_ms = 80;
   float speed_min_counts = 6;
   float stall_min_ms = 30;
+  float accel_mm_s2 = 0;
 
   // "move" command
   float move_kp = 3.0f;

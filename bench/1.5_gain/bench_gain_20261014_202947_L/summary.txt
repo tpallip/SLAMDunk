@@ -30,4 +30,4 @@ speed at 100 PWM by trial: 283.8, 281.0, 282.8
 suggested config:
   "left_ff_offset_pwm": 18.1,
   "left_ff_mm_s_per_pwm": 3.42
-plot skipped (ImportError: Matplotlib requires numpy>=1.23; you have 1.21.5)
+plot: /data/robotic-science-systems/SLAMDunk/bench/1.5_gain/bench_gain_20261014_202947_L/plot.png

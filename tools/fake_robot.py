@@ -2,7 +2,7 @@
 
 Replays a saved CSV as telemetry every TELEMETRY_INTERVAL_MS, on a loop, and
 prints each command it receives (repeats only once). Commands change the replayed records the way
-the firmware would, so the logger shows them: "pwm" sets the pwm columns in
+the firmware would ("move" and "turn" reply done at once), so the logger shows them: "pwm" sets the pwm columns in
 manual mode ("vel" sets them to the firmware's feedforward PWM; there is no
 simulated speed loop), "start" sets signal, and manual mode stops after
 MANUAL_TIMEOUT_MS without a "pwm" or "vel" command. "ping <id>" is answered
@@ -81,11 +81,11 @@ class FakeController:
             if not self.manual:
                 self.signal = 0
             self.pwm = (0.0, 0.0)
-        elif len(parts) == 2 and parts[0] == "move":
+        elif len(parts) in (2, 3) and parts[0] in ("move", "turn"):
             if not self.manual:
                 return "ignored: not in manual mode"
             self.pwm = (0.0, 0.0)
-            return f"move {parts[1]} mm accepted (not simulated: the fake robot doesn't drive)"
+            return f"{command} accepted (not simulated: the fake robot doesn't drive)"
         elif len(parts) == 3 and parts[0] in ("pwm", "vel"):
             try:
                 left, right = float(parts[1]), float(parts[2])
@@ -431,6 +431,9 @@ def serve(conn, records):
                     continue
                 if command:
                     result = controller.handle(command)
+                    if result.endswith("accepted (not simulated: the fake robot doesn't drive)"):
+                        # done at once, like a move that had nowhere to go
+                        conn.sendall(f"#I {parts[0]} done: left +0.00 mm, right +0.00 mm still to go\n".encode())
                     if result == "unknown command":
                         try:
                             conn.sendall(f"#E unknown command: {command}\n".encode())

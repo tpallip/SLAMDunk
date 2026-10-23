@@ -4,7 +4,8 @@
 #include <stdint.h>
 
 /**
- * @brief Drives a set distance straight ahead (or back) using the encoders.
+ * @brief Drives each wheel a set distance using the encoders: both the same
+ * way for "move", opposite ways for "turn".
  *
  * Gives each wheel a target count, then on every cycle turns the remaining
  * distance into wheel speed targets for WheelSpeedController_c:
@@ -32,13 +33,14 @@ class MoveController_c {
                      float stop_lead_s);
 
     /**
-     * @brief Starts a move of distance_mm (negative drives backwards).
+     * @brief Starts a move: each wheel drives its own distance (negative: backwards).
+     * @param speed_mm_s Fastest wheel speed for this move; 0 uses max_speed_mm_s.
      * @param left_count, right_count Current absolute encoder counts.
      * @param left_mm_per_count, right_mm_per_count Wheel travel per count.
      * @param now_ms Current time; the move gives up at a deadline that allows
      * twice the time at min_speed_mm_s, plus one second.
      */
-    void start(float distance_mm, int32_t left_count, int32_t right_count,
+    void start(float left_mm, float right_mm, float speed_mm_s, int32_t left_count, int32_t right_count,
                float left_mm_per_count, float right_mm_per_count, unsigned long now_ms);
 
     /** @brief Abandons the move; isActive() becomes false. */
@@ -67,7 +69,9 @@ class MoveController_c {
     int32_t right_target;
     float left_mm_per_count;
     float right_mm_per_count;
-    float direction;            // +1 forwards, -1 backwards
+    float left_direction;       // +1 forwards, -1 backwards
+    float right_direction;
+    float speed_mm_s;           // fastest wheel speed for this move
     bool left_done;
     bool right_done;
     float left_error_mm;

@@ -13,6 +13,7 @@ WheelSpeedController_c::WheelSpeedController_c(float kp, float ki, float ff_offs
     breakaway_pwm(breakaway_pwm),
     run_min_pwm(run_min_pwm),
     target_mm_s(0.0f),
+    setpoint_mm_s(0.0f),
     speed_mm_s(0.0f),
     integral_mm(0.0f),
     mm_per_count(0.0f),
@@ -36,6 +37,10 @@ float WheelSpeedController_c::getTarget() const {
   return target_mm_s;
 }
 
+float WheelSpeedController_c::getSetpoint() const {
+  return setpoint_mm_s;
+}
+
 float WheelSpeedController_c::getSpeed() const {
   return speed_mm_s;
 }
@@ -47,6 +52,7 @@ bool WheelSpeedController_c::isKicking() const {
 
 void WheelSpeedController_c::reset() {
   target_mm_s = 0.0f;
+  setpoint_mm_s = 0.0f;
   integral_mm = 0.0f;
 }
 
@@ -96,22 +102,38 @@ void WheelSpeedController_c::measure(int32_t count, unsigned long now_ms, float 
   speed_mm_s = speed;
 }
 
+void WheelSpeedController_c::stepSetpoint(float dt_s) {
+  float direction = target_mm_s > 0.0f ? 1.0f : -1.0f;
+  if (accel_mm_s2 <= 0.0f) {
+    setpoint_mm_s = target_mm_s;
+  } else if (setpoint_mm_s * direction <= 0.0f) {
+    // starting, or reversing: climb from zero
+    setpoint_mm_s = direction * fminf(fabsf(target_mm_s), accel_mm_s2 * dt_s);
+  } else if (fabsf(target_mm_s) <= fabsf(setpoint_mm_s)) {
+    setpoint_mm_s = target_mm_s;
+  } else {
+    setpoint_mm_s += direction * fminf(fabsf(target_mm_s) - fabsf(setpoint_mm_s), accel_mm_s2 * dt_s);
+  }
+}
+
 float WheelSpeedController_c::update(float dt_s) {
   if (target_mm_s == 0.0f) {
     kicking = false;
     integral_mm = 0.0f;
+    setpoint_mm_s = 0.0f;
     return 0.0f;
   }
+  stepSetpoint(dt_s);
 
-  float direction = target_mm_s > 0.0f ? 1.0f : -1.0f;
-  float feedforward = direction * (ff_offset_pwm + fabsf(target_mm_s) / ff_mm_s_per_pwm);
-  float error = target_mm_s - speed_mm_s;
+  float direction = setpoint_mm_s > 0.0f ? 1.0f : -1.0f;
+  float feedforward = direction * (ff_offset_pwm + fabsf(setpoint_mm_s) / ff_mm_s_per_pwm);
+  float error = setpoint_mm_s - speed_mm_s;
 
   // Stuck: no count for longer than the target speed allows (2.5 count periods,
   // at least stall_min_ms). Push from the breakaway PWM upwards until the
   // wheel moves, holding the integral, which would otherwise wind up.
   if (breakaway_pwm > 0.0f && mm_per_count > 0.0f && samples > 1) {
-    unsigned long count_period_ms = (unsigned long)(1000.0f * mm_per_count / fabsf(target_mm_s));
+    unsigned long count_period_ms = (unsigned long)(1000.0f * mm_per_count / fabsf(setpoint_mm_s));
     unsigned long allowed_ms = max(stall_min_ms, count_period_ms * 5 / 2);
     if (times[newest] - last_change_ms > allowed_ms) {
       float pi = fabsf(feedforward + kp * error + ki * integral_mm);

@@ -1,0 +1,26 @@
+{
+  "left_wheel_radius_mm": 16.0,
+  "right_wheel_radius_mm": 16.0,
+  "wheel_separation_mm": 90.0,
+
+  "left_breakaway_pwm": 40,
+  "right_breakaway_pwm": 42,
+  "left_run_min_pwm": 19,
+  "right_run_min_pwm": 14,
+  "left_ff_offset_pwm": 11.1,
+  "left_ff_mm_s_per_pwm": 3.51,
+  "right_ff_offset_pwm": 5.0,
+  "right_ff_mm_s_per_pwm": 3.79,
+
+  "speed_kp": 0.3,
+  "speed_ki": 3.0,
+  "accel_mm_s2": 300,
+
+  "move_min_speed_mm_s": 15,
+  "move_max_speed_mm_s": 40,
+  "move_stop_lead_s": 0.07,
+  "line_threshold": 1400,
+
+  "update_interval_ms": 10,
+  "telemetry_interval_ms": 10
+}

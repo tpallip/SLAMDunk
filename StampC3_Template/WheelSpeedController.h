@@ -24,6 +24,11 @@
  *   wheel that has just lurched free back down until it stalls again. The
  *   integral doesn't wind down while the output sits on the floor.
  *
+ * With accel_mm_s2 set, the setpoint the controller works to climbs towards
+ * the target at that rate instead of jumping, so a start doesn't ask for the
+ * whole target from a wheel that reads 0 and saturate the output. Slowing
+ * down and stopping still happen at once.
+ *
  * Speed is measured over a window long enough for about min_counts counts at
  * the previous estimate (between 30 ms and window_ms), and capped at one count
  * over the time since the last count, so a stall shows up within a few cycles.
@@ -56,6 +61,8 @@ class WheelSpeedController_c {
     float min_counts = 6.0f;
     /** @brief A wheel counts as stuck after max(this, 2.5 count periods at the target) with no count, ms. */
     unsigned long stall_min_ms = 30;
+    /** @brief How fast the setpoint may rise towards the target, mm/s per second; 0 turns it off. */
+    float accel_mm_s2 = 0.0f;
 
     WheelSpeedController_c(float kp, float ki, float ff_offset_pwm, float ff_mm_s_per_pwm,
                            float max_pwm, float breakaway_pwm, float run_min_pwm);
@@ -65,6 +72,9 @@ class WheelSpeedController_c {
 
     /** @brief Returns the current target in mm/s. */
     float getTarget() const;
+
+    /** @brief Returns the setpoint the controller is working to, in mm/s. */
+    float getSetpoint() const;
 
     /** @brief Returns the measured speed in mm/s. */
     float getSpeed() const;
@@ -95,6 +105,7 @@ class WheelSpeedController_c {
     static const int HISTORY = 16;     // encoder samples kept; covers window_ms at 10 ms per read
 
     float target_mm_s;
+    float setpoint_mm_s;               // target_mm_s, limited by accel_mm_s2
     float speed_mm_s;
     float integral_mm;
     float mm_per_count;
@@ -105,6 +116,8 @@ class WheelSpeedController_c {
     int samples;                       // valid entries, up to HISTORY
     int newest;                        // index of the latest sample
     unsigned long last_change_ms;      // time of the latest sample whose count changed
+
+    void stepSetpoint(float dt_s);
 };
 
 #endif

@@ -35,8 +35,9 @@ class Controller_c {
     /** @brief Per-wheel speed controllers used by the "vel" and "move" commands. */
     WheelSpeedController_c left_speed;
     WheelSpeedController_c right_speed;
-    /** @brief Drives a set distance for the "move" command, through the speed controllers. */
+    /** @brief Drives set wheel distances for "move" and "turn", through the speed controllers. */
     MoveController_c mover;
+    const char *move_name = "move";    // "move" or "turn", for the done/timed out reply
     /** @brief "test deadband" command. */
     DeadbandTest_c deadband;
     /** @brief "test keepturn" command. */
@@ -129,6 +130,11 @@ class Controller_c {
     const char *robot_id = "unknown";
     unsigned long enc_us = 0;          // micros() at the last encoder read
     bool enc_ok = false;
+    unsigned long last_enc_ok_ms = 0;  // time of the last good encoder read
+    // With no good encoder read for this long, "vel" and "move" stop: the
+    // speed controller would read the wheels as stuck and drive them harder.
+    static const unsigned long ENCODER_LOSS_MS = 50;
+    static constexpr float MAX_TURN_DEG = 3600.0f;
     TaskTimer_c update_timer;
     TaskTimer_c telemetry_timer;
     unsigned long recovery_start_ms;
@@ -138,6 +144,10 @@ class Controller_c {
 
     /** @brief Clears manual PWM and speed targets, without sending a motor command. */
     void clearManual();
+
+    /** @brief Starts a "move" or "turn" with these wheel distances. */
+    void startMove(Robot_c &robot, const char *name, float left_mm, float right_mm, float speed_mm_s,
+                   CmdSource source, unsigned long now);
 
     void startDeadbandTest(Robot_c &robot, RobotWifiAP_c &server, const char *cmd,
                            CmdSource source, unsigned long now);
@@ -196,8 +206,11 @@ class Controller_c {
      * (and returns auto mode to waiting); "pwm <left> <right>" sets the motor
      * PWM in manual mode, clamped to manual_max_pwm; "vel <left> <right>" sets
      * wheel speeds in mm/s in manual mode, clamped to manual_max_speed_mm_s;
-     * "move <mm>" drives that far straight (negative: backwards) in manual
-     * mode, then stops; any other motion command or "stop" cancels it.
+     * "move <mm> [speed]" drives that far straight (negative: backwards) in
+     * manual mode, then stops; "turn <deg> [speed]" turns on the spot
+     * (positive: anticlockwise) by the encoders and wheel_separation_mm. The
+     * speed (mm/s, per wheel) defaults to move_max_speed_mm_s. Any other
+     * motion command or "stop" cancels either.
      * "ping <id>" replies "#P <id> <t_ms>" at once, for measuring the round
      * trip. "test deadband <L|R|S> [dir min max step repeats rest_ms run_ms]"
      * runs the deadband test, and "test keepturn <L|R|S> [dir start step_ms
