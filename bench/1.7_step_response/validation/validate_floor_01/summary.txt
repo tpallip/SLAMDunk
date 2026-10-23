@@ -1,0 +1,36 @@
+   Validation: validate_floor_01.csv (signed mm/s, last 0.5 s of each level)    
+┏━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━┓
+┃    ┃        ┃        ┃        ┃        ┃        ┃         ┃        ┃  moving ┃
+┃    ┃  pwm L ┃   left ┃   left ┃   left ┃  right ┃   right ┃  right ┃      as ┃
+┃  # ┃    / R ┃   meas ┃   pred ┃    err ┃   meas ┃    pred ┃    err ┃ predic… ┃
+┡━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━┩
+│  0 │  0 / 0 │    0.0 │    0.0 │   +0.0 │    0.0 │     0.0 │   +0.0 │     yes │
+│  1 │   45 / │  105.8 │   91.9 │  +13.9 │ -139.2 │  -126.4 │  -12.8 │     yes │
+│    │    -45 │        │        │        │        │         │        │         │
+│  2 │   75 / │  211.9 │  194.4 │  +17.5 │ -251.8 │  -240.7 │  -11.1 │     yes │
+│    │    -75 │        │        │        │        │         │        │         │
+│  3 │   35 / │   71.8 │   57.7 │  +14.1 │ -100.1 │   -88.3 │  -11.8 │     yes │
+│    │    -35 │        │        │        │        │         │        │         │
+│  4 │   21 / │    0.0 │    0.0 │   -0.0 │  -37.8 │   -34.9 │   -2.9 │     yes │
+│    │    -21 │        │        │        │        │         │        │         │
+│  5 │   55 / │  142.9 │  126.0 │  +16.9 │ -178.1 │  -164.5 │  -13.6 │     yes │
+│    │    -55 │        │        │        │        │         │        │         │
+│  6 │  -60 / │ -174.3 │ -150.5 │  -23.7 │  194.3 │   183.9 │  +10.4 │     yes │
+│    │     60 │        │        │        │        │         │        │         │
+│  7 │  -90 / │ -278.6 │ -263.4 │  -15.2 │  304.4 │   299.5 │   +4.9 │     yes │
+│    │     90 │        │        │        │        │         │        │         │
+│  8 │  -40 / │  -94.7 │  -75.3 │  -19.4 │  116.4 │   106.9 │   +9.5 │     yes │
+│    │     40 │        │        │        │        │         │        │         │
+│  9 │  0 / 0 │    0.0 │   -0.0 │   +0.0 │    0.0 │     0.0 │   -0.0 │     yes │
+│ 10 │   65 / │  177.1 │  160.2 │  +16.9 │ -207.3 │  -202.6 │   -4.7 │     yes │
+│    │    -65 │        │        │        │        │         │        │         │
+│ 11 │  0 / 0 │    0.0 │    0.0 │   -0.0 │    0.0 │    -0.0 │   +0.0 │     yes │
+└────┴────────┴────────┴────────┴────────┴────────┴─────────┴────────┴─────────┘
+left: settled error mean +2.6, rms 17.5 mm/s over 8 moving levels; whole trace 
+rms 17.1 mm/s (50 ms window); within 10 % of prediction 25 % of moving time
+right: settled error mean -3.6, rms 9.8 mm/s over 9 moving levels; whole trace 
+rms 14.6 mm/s (50 ms window); within 10 % of prediction 61 % of moving time
+stall/start decisions: all as predicted
+saved 
+/data/robotic-science-systems/SLAMDunk/bench/1.7_step_response/validation/valida
+te_floor_01/plot.png
