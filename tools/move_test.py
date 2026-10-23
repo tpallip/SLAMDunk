@@ -31,8 +31,8 @@ from rich.table import Table
 
 HOST, PORT = "127.0.0.1", 9100
 GAP_S = 1.5
-SEPARATION_MM = 84.0
-RADIUS_MM = 16.0
+SEPARATION_MM = 84.43
+RADIUS_MM = 16.26
 COUNTS_PER_REV = 358.3
 OUT_DIR = Path(__file__).resolve().parent.parent / "bench" / "move_test"
 
@@ -95,7 +95,11 @@ def run(args, console):
         time.sleep(args.gap)
         for i, command in enumerate(commands):
             sock.sendall(command.encode() + b"\n")
-            result = wait_for_done(sock, buffer, 30)
+            # the firmware's own deadline: twice the time at the slowest speed, plus 1 s
+            left_mm, right_mm = targets(command, SEPARATION_MM)
+            parts = command.split()
+            speed = min(40.0, float(parts[2])) if len(parts) > 2 else 15.0
+            result = wait_for_done(sock, buffer, 2 * max(abs(left_mm), abs(right_mm)) / speed + 10)
             console.print(f"  [{i + 1}/{len(commands)}] {command}: {result or 'no reply: stopping'}")
             if result is None or not result.startswith(("#I move", "#I turn")):
                 break

@@ -43,12 +43,12 @@ GAP_S = 1.5
 RESEND_S = 0.2
 DISTANCE_MM = 300
 TURNS = 2.5
-SEPARATION_MM = 84.0
+SEPARATION_MM = 84.43
 TRIM_S = 0.8                        # --course: skipped at the end of each stretch, where move/turn slow down
 SETTLE_S = 0.8                      # skipped at the start of each step for the steady-state numbers
 WINDOW_S = 0.1                      # speed is measured over this window
 STUCK_MM_S = 3.0                    # slower than this over 50 ms counts as stuck
-MM_PER_COUNT = 2 * math.pi * 16.0 / 358.3
+MM_PER_COUNT = 2 * math.pi * 16.26 / 358.3
 OUT_DIR = Path(__file__).resolve().parent.parent / "bench" / "2.6_speed_control"
 
 

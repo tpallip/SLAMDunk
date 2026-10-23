@@ -1,0 +1,2 @@
+n,command,left_target,left_err,right_target,right_err,heading_deg,coast_left,coast_right,time_s
+0,move -250 60,-250.000,-1.959,-250.000,-0.275,1.161,4.209,1.403,4.322
