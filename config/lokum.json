@@ -1,7 +1,7 @@
 {
   "left_wheel_radius_mm": 16.0,
   "right_wheel_radius_mm": 16.0,
-  "wheel_separation_mm": 83.0,
+  "wheel_separation_mm": 84.0,
 
   "left_breakaway_pwm": 40,
   "right_breakaway_pwm": 42,
