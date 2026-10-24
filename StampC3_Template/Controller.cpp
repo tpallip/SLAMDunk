@@ -49,6 +49,12 @@ void Controller_c::applyConfig() {
   mover.min_speed_mm_s = c.move_min_speed_mm_s;
   mover.tolerance_mm = c.move_tolerance_mm;
   mover.stop_lead_s = c.move_stop_lead_s;
+  mover.turn_stop_lead_s = c.turn_stop_lead_s;
+  mover.sync_kp = c.move_sync_kp;
+
+  twist.kp = c.twist_kp;
+  twist.max_error_mm = c.twist_max_error_mm;
+  twist.max_speed_mm_s = c.manual_max_speed_mm_s;
 }
 
 void Controller_c::reset() {
@@ -166,7 +172,7 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
     }
     // Checked after the commands above, so a "vel" that arrives while the
     // encoders are out stops before it drives.
-    bool driving = manual_vel && (mover.isActive() || left_speed.getTarget() != 0.0f
+    bool driving = manual_vel && (mover.isActive() || twist.isActive() || left_speed.getTarget() != 0.0f
                                   || right_speed.getTarget() != 0.0f);
     if(driving && now - last_enc_ok_ms > ENCODER_LOSS_MS) {
       clearManual();
@@ -180,6 +186,13 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
               move_name, mover.timedOut() ? "timed out" : "done",
               mover.getLeftError(), mover.getRightError());
       }
+      left_speed.setTarget(left_target);
+      right_speed.setTarget(right_target);
+    }
+    if(twist.isActive()) {
+      float left_target, right_target;
+      twist.update(robot.getLeftEncoderCount(), robot.getRightEncoderCount(),
+                   (now - last_manual_ms) / 1000.0f, left_target, right_target);
       left_speed.setTarget(left_target);
       right_speed.setTarget(right_target);
     }
@@ -218,7 +231,8 @@ void Controller_c::startMove(Robot_c &robot, const char *name, float left_mm, fl
   mover.start(left_mm, right_mm, constrain(fabsf(speed_mm_s), 0.0f, max_speed),
               robot.getLeftEncoderCount(), robot.getRightEncoderCount(),
               TWO_PI * odometry.leftWheelRadiusMm / counts_per_rev,
-              TWO_PI * odometry.rightWheelRadiusMm / counts_per_rev, now);
+              TWO_PI * odometry.rightWheelRadiusMm / counts_per_rev, now, strcmp(name, "turn") == 0);
+  twist.stop();
   manual_cmd_ms = now;
   manual_source = source;
 }
@@ -229,6 +243,7 @@ void Controller_c::clearManual() {
   left_speed.reset();
   right_speed.reset();
   mover.cancel();
+  twist.stop();
 }
 
 void Controller_c::startDeadbandTest(Robot_c &robot, RobotWifiAP_c &server, const char *cmd,
@@ -646,7 +661,7 @@ void Controller_c::handleCommand(Robot_c &robot, RobotWifiAP_c &server, const ch
       return;
     }
     if(strncmp(cmd, "pwm ", 4) == 0 || strncmp(cmd, "vel ", 4) == 0 ||
-       strncmp(cmd, "move ", 5) == 0 || strncmp(cmd, "turn ", 5) == 0 || strncmp(cmd, "test ", 5) == 0 || strcmp(cmd, "start") == 0 ||
+       strncmp(cmd, "move ", 5) == 0 || strncmp(cmd, "turn ", 5) == 0 || strncmp(cmd, "cmd ", 4) == 0 || strncmp(cmd, "test ", 5) == 0 || strcmp(cmd, "start") == 0 ||
        strncmp(cmd, "set ", 4) == 0 || strcmp(cmd, "config reset") == 0) {
       reply(server, source, "#E a test is running; send stop first\n");
       return;
@@ -685,6 +700,7 @@ void Controller_c::handleCommand(Robot_c &robot, RobotWifiAP_c &server, const ch
     if(usr_mode == MANUAL_CTRL && isfinite(left) && isfinite(right)) {
       manual_vel = false;
       mover.cancel();
+      twist.stop();
       left_speed.reset();
       right_speed.reset();
       float max_pwm = config.values.manual_max_pwm;
@@ -698,9 +714,33 @@ void Controller_c::handleCommand(Robot_c &robot, RobotWifiAP_c &server, const ch
     if(usr_mode == MANUAL_CTRL && isfinite(left) && isfinite(right)) {
       manual_vel = true;
       mover.cancel();
+      twist.stop();
       float max_speed = config.values.manual_max_speed_mm_s;
       left_speed.setTarget(constrain(left, -max_speed, max_speed));
       right_speed.setTarget(constrain(right, -max_speed, max_speed));
+      manual_cmd_ms = now;
+      manual_source = source;
+    }
+  }
+  else if(strncmp(cmd, "cmd ", 4) == 0) {
+    if(sscanf(cmd, "cmd %f %f", &left, &right) != 2) {
+      reply(server, source, "#E usage: cmd <v mm/s> <omega deg/s>\n");
+    }
+    else if(usr_mode == MANUAL_CTRL && isfinite(left) && isfinite(right)) {
+      manual_vel = true;
+      mover.cancel();
+      if(left == 0.0f && right == 0.0f) {
+        twist.stop();
+        left_speed.setTarget(0.0f);
+        right_speed.setTarget(0.0f);
+      } else {
+        float counts_per_rev = odometry.encoderCountsPerRevolution;
+        float max_speed = config.values.manual_max_speed_mm_s;
+        twist.set(constrain(left, -max_speed, max_speed), right, config.values.wheel_separation_mm,
+                  robot.getLeftEncoderCount(), robot.getRightEncoderCount(),
+                  TWO_PI * odometry.leftWheelRadiusMm / counts_per_rev,
+                  TWO_PI * odometry.rightWheelRadiusMm / counts_per_rev);
+      }
       manual_cmd_ms = now;
       manual_source = source;
     }

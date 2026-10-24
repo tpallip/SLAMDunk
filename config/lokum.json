@@ -18,7 +18,11 @@
 
   "move_min_speed_mm_s": 40,
   "move_max_speed_mm_s": 60,
-  "move_stop_lead_s": 0.057,
+  "move_stop_lead_s": 0.075,
+  "turn_stop_lead_s": 0.057,
+  "move_sync_kp": 4.0,
+  "twist_kp": 4.0,
+  "twist_max_error_mm": 20.0,
   "line_threshold": 1400,
 
   "update_interval_ms": 10,

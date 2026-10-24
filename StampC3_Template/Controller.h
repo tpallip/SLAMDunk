@@ -7,6 +7,7 @@
 #include "OdometryModel.h"
 #include "WheelSpeedController.h"
 #include "MoveController.h"
+#include "TwistController.h"
 #include "DeadbandTest.h"
 #include "KeepTurnTest.h"
 #include "GainTest.h"
@@ -38,6 +39,8 @@ class Controller_c {
     /** @brief Drives set wheel distances for "move" and "turn", through the speed controllers. */
     MoveController_c mover;
     const char *move_name = "move";    // "move" or "turn", for the done/timed out reply
+    /** @brief Body velocity for the "cmd" command, through the speed controllers. */
+    TwistController_c twist;
     /** @brief "test deadband" command. */
     DeadbandTest_c deadband;
     /** @brief "test keepturn" command. */
@@ -210,7 +213,9 @@ class Controller_c {
      * manual mode, then stops; "turn <deg> [speed]" turns on the spot
      * (positive: anticlockwise) by the encoders and wheel_separation_mm. The
      * speed (mm/s, per wheel) defaults to move_max_speed_mm_s. Any other
-     * motion command or "stop" cancels either.
+     * motion command or "stop" cancels either. "cmd <v> <omega>" drives at v
+     * mm/s forward while turning at omega deg/s (positive: anticlockwise),
+     * held like "vel" (resend within manual_timeout_ms); "cmd 0 0" stops.
      * "ping <id>" replies "#P <id> <t_ms>" at once, for measuring the round
      * trip. "test deadband <L|R|S> [dir min max step repeats rest_ms run_ms]"
      * runs the deadband test, and "test keepturn <L|R|S> [dir start step_ms

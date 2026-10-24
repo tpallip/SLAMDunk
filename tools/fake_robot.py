@@ -3,9 +3,9 @@
 Replays a saved CSV as telemetry every TELEMETRY_INTERVAL_MS, on a loop, and
 prints each command it receives (repeats only once). Commands change the replayed records the way
 the firmware would ("move" and "turn" reply done at once), so the logger shows them: "pwm" sets the pwm columns in
-manual mode ("vel" sets them to the firmware's feedforward PWM; there is no
-simulated speed loop), "start" sets signal, and manual mode stops after
-MANUAL_TIMEOUT_MS without a "pwm" or "vel" command. "ping <id>" is answered
+manual mode ("vel" and "cmd" set them to the firmware's feedforward PWM; there
+is no simulated speed loop), "start" sets signal, and manual mode stops after
+MANUAL_TIMEOUT_MS without a "pwm", "vel" or "cmd" command. "ping <id>" is answered
 with "#P <id> <t_ms>" and unknown commands with "#E ...", like the firmware.
 "test deadband ...", "test keepturn ..." and "test gain ..." run fake versions
 of the on-robot tests (FakeDeadband, FakeKeepTurn, FakeGain). "id", "set", "get", "save" and
@@ -14,6 +14,7 @@ from StampC3_Template/RobotConfig.*.
 Run the logger with --host 127.0.0.1 --port 9000.
 """
 import argparse
+import math
 import random
 from pathlib import Path
 import re
@@ -27,6 +28,7 @@ MANUAL_TIMEOUT_MS = 500      # Controller_c::MANUAL_TIMEOUT_MS
 MANUAL_MAX_SPEED_MM_S = 250.0   # Controller_c::MANUAL_MAX_SPEED_MM_S
 # Controller_c::{LEFT,RIGHT}_FF_OFFSET_PWM and _FF_MM_S_PER_PWM
 FEEDFORWARD = ((17.0, 3.5), (12.0, 3.75))
+WHEEL_SEPARATION_MM = 90.0     # RobotConfigValues_t default, used by "cmd"
 PWM_LEFT, PWM_RIGHT, SIGNAL = 4, 5, 13   # column indexes in a telemetry record
 
 
@@ -86,7 +88,7 @@ class FakeController:
                 return "ignored: not in manual mode"
             self.pwm = (0.0, 0.0)
             return f"{command} accepted (not simulated: the fake robot doesn't drive)"
-        elif len(parts) == 3 and parts[0] in ("pwm", "vel"):
+        elif len(parts) == 3 and parts[0] in ("pwm", "vel", "cmd"):
             try:
                 left, right = float(parts[1]), float(parts[2])
             except ValueError:
@@ -94,7 +96,11 @@ class FakeController:
             if not self.manual:
                 return "ignored: not in manual mode"
             clamp = lambda v, limit: max(-limit, min(limit, v))
-            if parts[0] == "vel":
+            if parts[0] == "cmd":
+                # v mm/s and omega deg/s to wheel speeds, as TwistController_c does
+                half = math.radians(right) * WHEEL_SEPARATION_MM / 2
+                left, right = left - half, left + half
+            if parts[0] in ("vel", "cmd"):
                 self.pwm = tuple(
                     feedforward_pwm(clamp(v, MANUAL_MAX_SPEED_MM_S), *ff)
                     for v, ff in zip((left, right), FEEDFORWARD))

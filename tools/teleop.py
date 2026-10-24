@@ -8,8 +8,8 @@ import time
 HOST = "127.0.0.1"
 PORT = 9100
 MAX_COMMAND_LEN = 63      # sizeof(Controller_c::cmd_buf) - 1; longer lines are cut short
-# The robot stops if no "pwm" or "vel" arrives for Controller_c::MANUAL_TIMEOUT_MS
-# (500 ms), so a moving pwm/vel command is resent this often to keep it driving.
+# The robot stops if no "pwm", "vel" or "cmd" arrives for manual_timeout_ms
+# (500 ms), so a moving pwm/vel/cmd command is resent this often to keep it driving.
 RESEND_INTERVAL_S = 0.2
 
 HELP = """\
@@ -18,7 +18,10 @@ Commands (sent to the robot through logger.py):
   vel <left> <right> set wheel speeds in mm/s in manual mode, e.g. vel 100 100;
                      the robot holds each wheel at its speed (max 250)
   pwm <left> <right> set raw motor PWM in manual mode, e.g. pwm 40 40, pwm -30 30
-                     (vel and pwm are resent every 0.2 s until the next command)
+  drive <v> <omega>  drive at v mm/s while turning at omega deg/s (+ anticlockwise),
+                     e.g. drive 100 0 (straight), drive 0 90 (spin), drive 100 45 (arc);
+                     the robot keeps the turn rate on its encoders (sent as cmd)
+                     (vel, pwm and drive are resent every 0.2 s until the next command)
   forward <mm> [speed]  drive that far straight, then stop, e.g. forward 200
   back <mm> [speed]     the same backwards, e.g. back 50
   twist <deg> [speed]   turn on the spot, + anticlockwise, e.g. twist 90, twist -45
@@ -29,6 +32,7 @@ Commands (sent to the robot through logger.py):
                      the robot replies "#I move done" / "#I turn done")
   move <mm> [speed]  the robot's own command behind forward/back
   turn <deg> [speed] the robot's own command behind twist/left/right
+  cmd <v> <omega>    the robot's own command behind drive
   stop               stop the motors (auto mode: back to waiting)
   auto               back to the line follower, waiting for start
   start              start the line follower (auto mode)
@@ -76,9 +80,9 @@ class Sender:
 
 
 def is_moving(command):
-    """Whether command is "pwm/vel <left> <right>" with either side non-zero."""
+    """Whether command is "pwm/vel/cmd <a> <b>" with either number non-zero."""
     parts = command.split()
-    if len(parts) != 3 or parts[0] not in ("pwm", "vel"):
+    if len(parts) != 3 or parts[0] not in ("pwm", "vel", "cmd"):
         return False
     try:
         return float(parts[1]) != 0 or float(parts[2]) != 0
@@ -104,6 +108,12 @@ def translate(command):
     ValueError with a message for the user if its numbers don't parse.
     """
     parts = command.split()
+    if parts[0] == "drive":
+        try:
+            v, omega = (float(x) for x in parts[1:])
+        except ValueError:
+            raise ValueError("usage: drive <v mm/s> <omega deg/s>") from None
+        return f"cmd {v:g} {omega:g}"
     if parts[0] not in MOTION_VERBS:
         return command
     robot_cmd, sign = MOTION_VERBS[parts[0]]

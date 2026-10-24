@@ -14,7 +14,14 @@
  * and at least min_speed so the wheels don't stall in the motor deadband near
  * the end. A wheel stops once it is within tolerance of its target or has
  * passed it, allowing for the distance it coasts after stopping (its speed
- * times stop_lead_s); the move ends when both have, or at a deadline.
+ * times stop_lead_s, or turn_stop_lead_s for a turn); the move ends when both
+ * have, or at a deadline.
+ *
+ * While both wheels are driving, sync_kp keeps them in step: the gap in
+ * progress (mm, each wheel's share of its own distance) slows the wheel ahead
+ * and speeds up the one behind by sync_kp * gap each, so a wheel that starts
+ * late or runs fast at its PWM floor doesn't turn the robot off its heading
+ * and leave the other wheel finishing alone.
  */
 class MoveController_c {
   public:
@@ -28,6 +35,10 @@ class MoveController_c {
     float tolerance_mm;
     /** @brief Coasting allowance: a wheel stops this many seconds of travel early. */
     float stop_lead_s;
+    /** @brief Coasting allowance for a turn, where the robot carries less momentum. */
+    float turn_stop_lead_s;
+    /** @brief Speed correction per mm of progress gap between the wheels, in 1/s; 0 turns it off. */
+    float sync_kp;
 
     MoveController_c(float kp, float max_speed_mm_s, float min_speed_mm_s, float tolerance_mm,
                      float stop_lead_s);
@@ -39,9 +50,10 @@ class MoveController_c {
      * @param left_mm_per_count, right_mm_per_count Wheel travel per count.
      * @param now_ms Current time; the move gives up at a deadline that allows
      * twice the time at min_speed_mm_s, plus one second.
+     * @param turn true for a turn on the spot: uses turn_stop_lead_s.
      */
     void start(float left_mm, float right_mm, float speed_mm_s, int32_t left_count, int32_t right_count,
-               float left_mm_per_count, float right_mm_per_count, unsigned long now_ms);
+               float left_mm_per_count, float right_mm_per_count, unsigned long now_ms, bool turn = false);
 
     /** @brief Abandons the move; isActive() becomes false. */
     void cancel();
@@ -72,6 +84,9 @@ class MoveController_c {
     float left_direction;       // +1 forwards, -1 backwards
     float right_direction;
     float speed_mm_s;           // fastest wheel speed for this move
+    float lead_s;               // stop_lead_s or turn_stop_lead_s, for this move
+    float left_total_mm;        // each wheel's whole distance, for the progress gap
+    float right_total_mm;
     bool left_done;
     bool right_done;
     float left_error_mm;

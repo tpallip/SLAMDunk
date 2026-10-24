@@ -41,6 +41,12 @@ struct RobotConfigValues_t {
   float move_min_speed_mm_s = 15;
   float move_tolerance_mm = 0.2f;
   float move_stop_lead_s = 0.07f;
+  float turn_stop_lead_s = 0.07f;
+  float move_sync_kp = 0.0f;
+
+  // "cmd" command
+  float twist_kp = 4.0f;
+  float twist_max_error_mm = 20.0f;
 
   // line follower
   float line_threshold = 1400;
