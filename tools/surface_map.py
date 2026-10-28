@@ -14,7 +14,8 @@ If the separation is unknown, --fit-separation picks the value at which
 readings of the same spot from different passes agree best (a wrong
 separation twists later passes against earlier ones). It needs passes that
 overlap. The heading scale tools/sensor_spread.py prints also converts to a
-separation: --separation (90 / scale).
+separation: --separation (s / scale), s the separation the robot ran with
+(84.43 mm in config/lokum.json; 90 mm in runs before the geometry calibration).
 
 The five sensors sit on one 45 mm circle at different angles, so on a spin
 they sweep the same ring and their samples interleave, which sharpens edges
@@ -41,8 +42,8 @@ from rich.console import Console
 SENSORS = ["dn1", "dn2", "dn3", "dn4", "dn5"]
 SENSOR_RADIUS_MM = 45.0                     # DigitalTwin/RobotSimulation.pde
 SENSOR_ANGLES_DEG = [45, 14, 0, -14, -45]   # dn1 (left) to dn5 (right); 0 is straight ahead
-WHEEL_RADIUS_MM = 16.0                      # OdometryModel_c defaults
-SEPARATION_MM = 90.0
+WHEEL_RADIUS_MM = 16.26                     # calibrated, config/lokum.json (bench/geometry)
+SEPARATION_MM = 84.43
 COUNTS_PER_REV = 358.3
 CELL_MM = 1.0
 MIN_CONTRAST = 800        # black minus white needed to set a sensor's own black level
