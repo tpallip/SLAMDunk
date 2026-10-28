@@ -2,7 +2,8 @@
 
 Experiment (TODO 3.4): put the robot's spin centre (the midpoint between the
 wheels) over a long, straight black/white edge, then spin on the spot for
-several turns with the logger recording, e.g. teleop "manual", "vel -25 25".
+several turns with the logger recording: --spin drives it with the twist
+command, "cmd 0 <deg/s>", through the logger's teleop port.
 Each sensor sweeps a circle of radius RADIUS_MM and crosses the edge twice per
 turn, so around each crossing its distance from the edge is known from the
 odometry heading:
@@ -20,12 +21,21 @@ Each crossing is aligned on its own 50 % point, then refined against the pooled
 fit, so a constant reading lag or a misplaced spin centre doesn't widen the
 result. Usage:
 
+    python tools/sensor_spread.py --spin 70 --turns 5 --both   # logger recording, robot on the edge
     python tools/sensor_spread.py logs/run_x.csv
     python tools/sensor_spread.py logs/run_x.csv --radius 44 45 45 45 44 --plot
+
+--spin holds "cmd 0 <deg/s>" for --turns turns ("cmd" resent every 0.2 s),
+then sends "cmd 0 0", which slows down to a stop, and "stop"; --both then
+spins the other way. Every wheel target must be 0 or at least 50 mm/s
+(below that the wheels stick-slip), so |deg/s| >= 68 with b = 84.43 mm. At
+70 deg/s a sensor 45 mm out moves 0.55 mm per 10 ms record.
 """
 import argparse
 import csv
 import math
+import socket
+import time
 from pathlib import Path
 
 import numpy as np
@@ -41,10 +51,21 @@ MAX_FIT_RMS = 0.15        # normalised fit residual above which the result isn't
 HEADING_SCALE_RANGE = (0.8, 1.25)   # outside this the "turns" weren't real crossings
 OUT_DIR = Path(__file__).resolve().parent.parent / "bench" / "3.4_spatial_response"
 
+HOST, PORT = "127.0.0.1", 9100      # logger's teleop port (tools/teleop.py)
+RESEND_S = 0.2                      # "cmd" times out after 500 ms
+STOP_S = 1.5                        # slow-down and settle after "cmd 0 0"
+SEPARATION_MM = 84.43               # wheel_separation_mm in config/lokum.json
+MIN_WHEEL_MM_S = 50.0               # Decision 7 working range: slower wheels stick-slip
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Surface-sensor footprint from a spin over a straight edge.")
-    parser.add_argument("file", help="logger CSV recorded while spinning over the edge")
+    parser.add_argument("file", nargs="?", help="logger CSV recorded while spinning over the edge")
+    parser.add_argument("--spin", type=float, metavar="DEG_S",
+                        help="drive the spin instead: \"cmd 0 DEG_S\" through the logger (+ is anticlockwise)")
+    parser.add_argument("--turns", type=float, default=5.0, help="turns per direction for --spin (default: 5)")
+    parser.add_argument("--both", action="store_true", help="with --spin, then spin the same turns the other way")
+    parser.add_argument("--port", type=int, default=PORT, help=f"logger's teleop port for --spin (default: {PORT})")
     parser.add_argument("--radius", type=float, nargs="+", default=[RADIUS_MM], metavar="MM",
                         help=f"sensor distance from the spin centre in mm, one value or one per sensor (default: {RADIUS_MM})")
     parser.add_argument("--window", type=float, default=WINDOW_MM,
@@ -54,6 +75,8 @@ def parse_args():
     parser.add_argument("--out", type=Path, help=f"folder for the results (default: {OUT_DIR}/<file name>)")
     parser.add_argument("--plot", action="store_true", help="also save plots (needs matplotlib)")
     args = parser.parse_args()
+    if (args.file is None) == (args.spin is None):
+        parser.error("give a logger CSV to analyse, or --spin to drive the spin")
     if len(args.radius) not in (1, len(SENSORS)):
         parser.error(f"--radius takes 1 or {len(SENSORS)} values")
     return args
@@ -238,9 +261,60 @@ def analyse_sensor(data, runs, name, radius):
     return result, per_run
 
 
+def spin(args, console):
+    """Spins on the spot with the twist command, --turns each way, while the logger records."""
+    wheel = math.radians(abs(args.spin)) * SEPARATION_MM / 2
+    if wheel < MIN_WHEEL_MM_S:
+        console.print(f"[yellow]wheels at {wheel:.0f} mm/s, under {MIN_WHEEL_MM_S:g}: they'll stick-slip. "
+                      f"Use |deg/s| >= {math.degrees(2 * MIN_WHEEL_MM_S / SEPARATION_MM):.0f}.[/]")
+    try:
+        sock = socket.create_connection((HOST, args.port), timeout=3)
+    except OSError as e:
+        console.print(f"can't reach the logger on {HOST}:{args.port} ({e}). Is logger.py running with teleop?")
+        return
+    greeting = sock.recv(256).decode("utf-8", errors="replace").strip()
+    if not greeting.startswith("connected"):
+        console.print(greeting or "logger closed the connection")
+        return
+    console.print(greeting)
+
+    def send(command):
+        sock.sendall(command.encode() + b"\n")
+
+    rates = [args.spin, -args.spin] if args.both else [args.spin]
+    seconds = args.turns * 360 / abs(args.spin)
+    console.print(f"[bold]Spin centre (midpoint between the wheels) over the edge.[/] "
+                  f"{len(rates)} x {args.turns:g} turns, {seconds:.1f} s each. Ctrl+C stops the robot.")
+    try:
+        send("manual")
+        time.sleep(STOP_S)
+        for rate in rates:
+            command = f"cmd 0 {rate:g}"
+            console.print(f"  {command} for {seconds:.1f} s")
+            end = time.monotonic() + seconds
+            while time.monotonic() < end:
+                send(command)
+                time.sleep(min(RESEND_S, max(0.0, end - time.monotonic())))
+            send("cmd 0 0")
+            time.sleep(STOP_S)
+            send("stop")
+    except KeyboardInterrupt:
+        console.print("interrupted")
+    finally:
+        try:
+            send("stop")
+        except OSError:
+            pass
+        sock.close()
+    console.print("done. Stop the logger, then: python tools/sensor_spread.py logs/<run>.csv --plot")
+
+
 def main():
     args = parse_args()
     console = Console()
+    if args.spin is not None:
+        spin(args, console)
+        return
     data = load(args.file, args.start, args.end)
     runs = spin_runs(data)
     if not runs:
