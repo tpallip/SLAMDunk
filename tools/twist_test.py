@@ -270,8 +270,12 @@ def load(path):
     return {key: np.array([float(r[key]) for r in rows]) for key in rows[0]}
 
 
-def holds_in(data, join_s=0.3, min_s=1.0):
-    """Index ranges where either wheel is driven, joined across short dropouts."""
+def holds_in(data, join_s=0.1, min_s=1.0):
+    """Index ranges where either wheel is driven, joined across short dropouts.
+
+    join_s stays well under the stop between holds: with a short --gap the
+    slow-down leaves as little as 0.2 s of zero PWM before the next hold.
+    """
     t = data["t_ms"] / 1000
     on = (data["pwm_left"] != 0) | (data["pwm_right"] != 0)
     runs = []
@@ -309,8 +313,15 @@ def report(args, console):
     mm = [2 * math.pi * r / COUNTS_PER_REV for r in args.radius]
     left_mm, right_mm = data["enc_left"] * mm[0], data["enc_right"] * mm[1]
     points = points_of(args)
-    wanted = [p for p in schedule(args) if p is not PAUSE]
+    order = schedule(args)
+    wanted = [p for p in order if p is not PAUSE]
     holds = holds_in(data)
+    # A run stopped at a turn-round pause (one side of arc20) has only the holds before it.
+    sides = [i - k for k, i in enumerate(i for i, p in enumerate(order) if p is PAUSE)]
+    if len(holds) < len(wanted) and len(holds) in sides:
+        console.print(f"[yellow]found {len(holds)} holds: the run stopped at the turn-round pause, "
+                      f"reporting the holds before it[/]")
+        wanted = wanted[:len(holds)]
     if len(holds) < len(wanted):
         console.print(f"[red]found {len(holds)} holds, expected {len(wanted)}; check --set/--points and --repeats[/]")
         return
@@ -370,6 +381,8 @@ def report(args, console):
     point_rows = []
     for v_cmd, w_cmd, held in points:
         rs = [r for r in results if r["v_cmd"] == v_cmd and r["w_cmd"] == w_cmd]
+        if not rs:   # the side after a pause that wasn't run
+            continue
         ev = np.array([r["v"] - v_cmd for r in rs])
         ew = np.array([r["w"] - w_cmd for r in rs])
         worst_v, worst_w = ev[np.argmax(abs(ev))], ew[np.argmax(abs(ew))]
