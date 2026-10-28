@@ -19,11 +19,23 @@ each turn spent on black gives e. Only the sensor radius must be supplied.
 
 Each crossing is aligned on its own 50 % point, then refined against the pooled
 fit, so a constant reading lag or a misplaced spin centre doesn't widen the
-result. Usage:
+result.
+
+--line is for a black line (tape) instead of an edge: spin centre on the
+line. Each sensor then crosses the line twice per turn, so each turn has two
+black patches. The heading scale comes from same-kind crossings two apart.
+If the spin centre is a distance c off the line's middle, the patches sit at
+alpha0 and 180 - alpha0 from where the sensor is square to the line (sin
+alpha0 = -c / r), so the gaps between them alternate 180 -+ 2 alpha0; that
+gives alpha0 and |c|. Each patch's 50 % points are then at alpha0 plus and
+minus half its arc, which puts them at the line's edges, and each edge is
+fitted like the single edge above. The patch arc also gives the line width
+each sensor sees, w = 2 r cos(alpha0) sin(half arc). Usage:
 
     python tools/sensor_spread.py --spin 70 --turns 5 --both   # logger recording, robot on the edge
     python tools/sensor_spread.py logs/run_x.csv
     python tools/sensor_spread.py logs/run_x.csv --radius 44 45 45 45 44 --plot
+    python tools/sensor_spread.py logs/run_x.csv --line --plot   # spun on a line
 
 --spin holds "cmd 0 <deg/s>" for --turns turns ("cmd" resent every 0.2 s),
 then sends "cmd 0 0", which slows down to a stop, and "stop"; --both then
@@ -70,6 +82,8 @@ def parse_args():
                         help=f"sensor distance from the spin centre in mm, one value or one per sensor (default: {RADIUS_MM})")
     parser.add_argument("--window", type=float, default=WINDOW_MM,
                         help=f"mm either side of a crossing to use (default: {WINDOW_MM})")
+    parser.add_argument("--line", action="store_true",
+                        help="the spin centre was on a black line, not an edge (two black patches per turn)")
     parser.add_argument("--start", type=float, help="ignore records before this t_ms")
     parser.add_argument("--end", type=float, help="ignore records after this t_ms")
     parser.add_argument("--out", type=Path, help=f"folder for the results (default: {OUT_DIR}/<file name>)")
@@ -170,13 +184,16 @@ def find_crossings(theta, n):
     return crossings
 
 
-def heading_scale(all_crossings):
-    """Ratio of true rotation to odometry rotation, from same-kind crossings 360 degrees apart."""
+def heading_scale(all_crossings, per_turn=1):
+    """Ratio of true rotation to odometry rotation, from same-kind crossings 360 degrees apart.
+
+    per_turn: crossings of one kind in a turn (1 over an edge, 2 over a line).
+    """
     steps = []
     for crossings in all_crossings:
         for kind in (1, -1):
             thetas = [t for _, t, k in crossings if k == kind]
-            steps += [abs(b - a) for a, b in zip(thetas, thetas[1:])]
+            steps += [abs(b - a) for a, b in zip(thetas, thetas[per_turn:])]
     if not steps:
         return 1.0, 0
     return 2 * math.pi / float(np.median(steps)), len(steps)
@@ -208,6 +225,59 @@ def crossing_profiles(theta, n, raw, crossings, scale, offset_ratio, radius, win
             profiles.append({"id": idx, "kind": kind, "d": d[near], "n": n[lo:hi][near],
                              "raw": raw[lo:hi][near]})
     return profiles
+
+
+def line_patches(crossings, scale):
+    """Black patches on a line: (index of the rising crossing, half arc, middle theta, alpha).
+
+    alpha is the sensor's angle at the patch's middle, from where the sensor is
+    square to the line (rad, in the patch's own frame), so its distance across
+    the line is c + r sin(alpha) there. The two patches of a turn sit at alpha0
+    and pi - alpha0, so the gap after a patch is pi - 2 alpha and the gap before
+    it pi + 2 alpha. The alphas of every other patch are the same, so each is
+    the median over its parity.
+    """
+    patches = []
+    for idx, ((_, t1, k1), (_, t2, k2)) in enumerate(zip(crossings, crossings[1:])):
+        if k1 == 1 and k2 == -1:
+            patches.append([idx, abs(t2 - t1) * scale / 2, (t1 + t2) / 2])
+    gaps = [abs(b[2] - a[2]) * scale for a, b in zip(patches, patches[1:])]
+    alphas = []
+    for k in range(len(patches)):
+        ests = ([(math.pi - gaps[k]) / 2] if k < len(gaps) else []) + ([(gaps[k - 1] - math.pi) / 2] if k else [])
+        alphas.append(float(np.mean(ests)) if ests else 0.0)
+    for parity in (0, 1):
+        same = alphas[parity::2]
+        for k in range(parity, len(patches), 2):
+            patches[k].append(float(np.median(same)) if same else 0.0)
+    return [tuple(p) for p in patches]
+
+
+def line_profiles(theta, n, raw, crossings, patches, scale, radius, window, direction):
+    """Distance onto black (mm) around both edges of each black patch on a line."""
+    profiles = []
+    for idx, half, _, alpha in patches:
+        # Rising edge at alpha - half: d = r (sin(phi) - sin(phi50)). Falling edge at
+        # alpha + half, where d = -r (sin(alpha + half + delta) - sin(alpha + half)),
+        # the same form with phi50 = pi + alpha + half.
+        for j, phi50 in ((idx, alpha - half), (idx + 1, math.pi + alpha + half)):
+            i, theta50, kind = crossings[j]
+            lo = (crossings[j - 1][0] + i) // 2 if j > 0 else 0
+            hi = (i + crossings[j + 1][0]) // 2 if j + 1 < len(crossings) else len(n)
+            delta = (theta[lo:hi] - theta50) * scale * direction
+            d = radius * (np.sin(phi50 + delta) - math.sin(phi50))
+            near = np.abs(d) <= window
+            if near.sum() >= 3:
+                profiles.append({"id": j, "kind": kind, "d": d[near], "n": n[lo:hi][near],
+                                 "raw": raw[lo:hi][near]})
+    return profiles
+
+
+def line_offset(patches, radius):
+    """Spin centre's distance from the line's middle (mm, size only): |c| = r |sin(alpha)|."""
+    if len(patches) < 2:
+        return None
+    return radius * float(np.median([abs(math.sin(p[3])) for p in patches]))
 
 
 def refine_alignment(profiles, fit, rounds=3):
@@ -242,11 +312,12 @@ def empirical_rise(d, n, fit, bin_mm=0.5):
     return float(np.interp(0.9, medians, centres) - np.interp(0.1, medians, centres))
 
 
-def analyse_sensor(data, runs, name, radius):
+def analyse_sensor(data, runs, name, radius, line=False):
     """Crossings and pooled edge fit for one sensor, over all spin runs."""
     raw_all = data[name]
     spin_idx = np.concatenate([np.arange(a, b) for a, b in runs])
-    white, black = np.percentile(raw_all[spin_idx], [5, 95])
+    # On a line a sensor is on black only about an eighth of the time.
+    white, black = np.percentile(raw_all[spin_idx], [5, 99 if line else 95])
     result = {"sensor": name, "white": white, "black": black, "radius": radius}
     if black - white < MIN_CONTRAST:
         result["error"] = f"contrast {black - white:.0f} too low: did it cross the edge?"
@@ -325,11 +396,12 @@ def main():
     console.print(f"{len(runs)} spin run(s), {sum(b - a for a, b in runs)} records, "
                   f"about {turns:.1f} turns by odometry")
 
-    sensors = [analyse_sensor(data, runs, name, r) for name, r in zip(SENSORS, radii)]
+    sensors = [analyse_sensor(data, runs, name, r, args.line) for name, r in zip(SENSORS, radii)]
 
     # One heading scale for the whole run, from every sensor's crossings.
     # Sensors without enough contrast have no per-run data, so they don't count.
-    scale, n_steps = heading_scale([c for _, per_run in sensors for *_, c, _ in per_run])
+    scale, n_steps = heading_scale([c for _, per_run in sensors for *_, c, _ in per_run],
+                                   per_turn=2 if args.line else 1)
     if n_steps and not HEADING_SCALE_RANGE[0] <= scale <= HEADING_SCALE_RANGE[1]:
         console.print(f"[yellow]heading scale {scale:.3f} is implausible (noisy crossings?); using 1.0[/]")
         scale = 1.0
@@ -343,14 +415,28 @@ def main():
         results.append(result)
         if "error" in result:
             continue
-        fractions = [f for *_, c, _ in per_run if (f := black_fraction(c, scale)) is not None]
-        offset_ratio = math.sin(math.pi * (float(np.median(fractions)) - 0.5)) if fractions else 0.0
-        result["offset_mm"] = offset_ratio * radius
-
         profiles = []
-        for theta, n, raw, crossings, direction in per_run:
-            profiles += crossing_profiles(theta, n, raw, crossings, scale, offset_ratio,
+        if args.line:
+            halves, offsets = [], []
+            for theta, n, raw, crossings, direction in per_run:
+                patches = line_patches(crossings, scale)
+                halves += [h for _, h, _, _ in patches]
+                if (c := line_offset(patches, radius)) is not None:
+                    offsets.append(c)
+                profiles += line_profiles(theta, n, raw, crossings, patches, scale,
                                           radius, args.window, direction)
+            offset = float(np.median(offsets)) if offsets else 0.0
+            # Edges at alpha +- half: w = r (sin(alpha + half) - sin(alpha - half)) = 2 r cos(alpha) sin(half).
+            cos_a = math.sqrt(max(0.0, 1 - (offset / radius) ** 2))
+            result["line_width_mm"] = 2 * radius * cos_a * math.sin(float(np.median(halves))) if halves else math.nan
+            result["offset_mm"] = offset if offsets else math.nan
+        else:
+            fractions = [f for *_, c, _ in per_run if (f := black_fraction(c, scale)) is not None]
+            offset_ratio = math.sin(math.pi * (float(np.median(fractions)) - 0.5)) if fractions else 0.0
+            result["offset_mm"] = offset_ratio * radius
+            for theta, n, raw, crossings, direction in per_run:
+                profiles += crossing_profiles(theta, n, raw, crossings, scale, offset_ratio,
+                                              radius, args.window, direction)
         if len(profiles) < 2:
             result["error"] = f"only {len(profiles)} crossing(s) found"
             continue
@@ -371,22 +457,25 @@ def main():
 
     table = Table(title=f"Surface sensor spread (mm): {Path(args.file).name}")
     for column in ["sensor", "white", "black", "cross", "step", "sigma", "FWHM",
-                   "10-90 fit", "10-90 data", "rms", "offset"]:
+                   "10-90 fit", "10-90 data", "rms", "offset"] + (["line w"] if args.line else []):
         table.add_column(column, justify="right")
     for r in results:
+        width = [f"{r.get('line_width_mm', math.nan):.1f}"] if args.line else []
         if "error" in r:
             table.add_row(r["sensor"], f"{r['white']:.0f}", f"{r['black']:.0f}", "[red]-[/]",
-                          *[""] * 7)
+                          *[""] * (7 + len(width)))
             continue
         rise = "-" if r["rise_10_90"] is None else f"{r['rise_10_90']:.2f}"
         table.add_row(r["sensor"], f"{r['white']:.0f}", f"{r['black']:.0f}", str(r["crossings"]),
                       f"{r['spacing']:.2f}", f"{r['sigma']:.2f}", f"{2.3548 * r['sigma']:.2f}",
-                      f"{2.5631 * r['sigma']:.2f}", rise, f"{r['rms']:.3f}", f"{r['offset_mm']:+.1f}")
+                      f"{2.5631 * r['sigma']:.2f}", rise, f"{r['rms']:.3f}", f"{r['offset_mm']:+.1f}", *width)
     console.print(table)
+    offset = ("spin centre's distance from the line's middle (size only). line w: line width at the sensor's "
+              "50 % level" if args.line else "spin centre's distance onto black")
     console.print("cross: edge crossings used. step: distance between samples. sigma: Gaussian footprint "
                   "fitted to the edge response. FWHM: footprint width at half height. 10-90: distance over "
                   "which the reading goes from 10 % to 90 % of white-to-black, from the fit and from the "
-                  "binned data. rms: fit residual (normalised). offset: spin centre's distance onto black.")
+                  f"binned data. rms: fit residual (normalised). offset: {offset}.")
     for r in results:
         if "error" in r:
             console.print(f"[red]{r['sensor']}: {r['error']}[/]")
@@ -400,7 +489,7 @@ def main():
         writer = csv.writer(f)
         writer.writerow(["sensor", "radius_mm", "white", "black", "crossings", "points", "sample_step_mm",
                          "sigma_mm", "fwhm_mm", "rise_10_90_fit_mm", "rise_10_90_data_mm", "fit_rms",
-                         "centre_offset_mm", "heading_scale", "error"])
+                         "centre_offset_mm", "line_width_mm", "heading_scale", "error"])
         for r in results:
             ok = "error" not in r
             writer.writerow([r["sensor"], r["radius"], f"{r['white']:.0f}", f"{r['black']:.0f}",
@@ -409,6 +498,7 @@ def main():
                              f"{2.3548 * r['sigma']:.3f}" if ok else "", f"{2.5631 * r['sigma']:.3f}" if ok else "",
                              "" if not ok or r["rise_10_90"] is None else f"{r['rise_10_90']:.3f}",
                              f"{r['rms']:.4f}" if ok else "", f"{r['offset_mm']:.2f}" if ok else "",
+                             f"{r['line_width_mm']:.2f}" if ok and "line_width_mm" in r else "",
                              f"{scale:.4f}", r.get("error", "")])
     with open(out / "profiles.csv", "w", newline="") as f:
         writer = csv.writer(f)
