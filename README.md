@@ -412,7 +412,11 @@ python tools/teleop.py
 > vel 100 100      # left/right wheel speed in mm/s, held by the robot (max 250)
 > vel -60 60       # turn on the spot
 > pwm 40 40        # raw left/right motor PWM, clamped on the robot to ±100
-> move 10          # drive 10 mm straight, then stop (move -10: backwards)
+> forward 200      # drive 200 mm straight, then stop (sent as move 200)
+> back 50 100      # 50 mm backwards at up to 100 mm/s (move -50 100)
+> twist 90         # turn on the spot by 90°, + anticlockwise (turn 90)
+> left 90          # same as twist 90; right 90 is twist -90
+> move 10          # the robot's own commands work too: move <mm>, turn <deg>
 > stop             # stop the motors
 > auto             # back to the line follower, waiting
 > start            # start the line follower
@@ -424,12 +428,16 @@ python tools/teleop.py
 - Use `vel` to drive straight. The two motors differ (the left one needs more
   PWM to start and is slower), so equal `pwm` values make the robot curve.
   `vel` closes the loop on each wheel's encoder; see "Wheel speed control".
-- `move <mm>` drives a set distance (up to 500 mm) on the encoders, through
-  the speed loop, and stops by itself; the robot replies with how far each
-  wheel ended from its target (`#I move done: ...`, printed by the logger). It slows down near the end and stops each wheel early by
-  the distance it coasts (`MOVE_STOP_LEAD_S`): if steps overshoot on your
-  robot, raise it; if they stop short, lower it. Any other motion command or
-  `stop` cancels a move.
+- `move <mm> [speed]` drives a set distance (up to 500 mm) on the encoders,
+  through the speed loop, and stops by itself; the robot replies with how far
+  each wheel ended from its target (`#I move done: ...`, printed by the
+  logger). `turn <deg> [speed]` does the same on the spot, each wheel driving
+  the angle times half of `wheel_separation_mm`, so the angle is only as good
+  as that setting (`#I turn done: ...`). The speed defaults to
+  `move_max_speed_mm_s`. Both slow down near the end and stop each wheel
+  early by the distance it coasts (`move_stop_lead_s`): if they overshoot on
+  your robot, raise it; if they stop short, lower it. Any other motion
+  command or `stop` cancels them.
 - In manual mode the robot stops the motors if no `pwm` or `vel` command
   arrives for 500 ms (`MANUAL_TIMEOUT_MS` in `Controller.h`), so losing WiFi
   can't leave it driving. The teleop resends a moving `pwm`/`vel` every 0.2 s
@@ -672,8 +680,12 @@ python tools/speed_test.py run                    # vel 20, 30, 50, 80: 4 s each
 python tools/speed_test.py report logs/<run>.csv  # after stopping the logger
 ```
 
-`--spin` spins on the spot instead (for the floor), `--speeds` sets the
-steps. The report gives, per step and wheel: mean speed and error, wobble (sd
+`--spin` spins on the spot instead, `--speeds` sets the steps. On the floor,
+`--course` drives each speed out (`move`), turns 2.5 times (`turn`, so it
+faces back) and drives back; report it with the same `--course`. Mark the
+start: if the robot doesn't come back along its track, `wheel_separation_mm`
+is off. The course report adds each stretch's wheel distances and heading
+change (`moves.csv`). The report gives, per step and wheel: mean speed and error, wobble (sd
 over 100 ms windows, as mm/s and % of target), p5-p95, time stuck, time to
 90 %, start overshoot, PWM mean and sd; plus `summary.csv` and
 `speed_steps.png` in `bench/2.6_speed_control/<run>/`. Run it before and after

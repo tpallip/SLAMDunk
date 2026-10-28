@@ -1,0 +1,29 @@
+{
+  "sources": [
+    "bench/twist_test/straight_04_02",
+    "bench/twist_test/straight20_01",
+    "bench/twist_test/spin20_02",
+    "bench/twist_test/arc20_03"
+  ],
+  "n_fit": 160,
+  "n_held": 40,
+  "units": "sigma_v mm/s, sigma_w rad/s; v mm/s, w rad/s",
+  "windows": {
+    "100ms": {
+      "a1": 0.00021754688852553886,
+      "a2": 0.3263856361130468,
+      "a3": 1.4586615594966861e-07,
+      "a4": 0.0003723601259996236,
+      "held_rms_err_v_mm_s": 1.380187379051358,
+      "held_rms_err_w_deg_s": 2.439386972595027
+    },
+    "500ms": {
+      "a1": 1.0072102466748595e-05,
+      "a2": 0.04074553284074145,
+      "a3": 4.209197233323598e-09,
+      "a4": 1.9159083352197287e-05,
+      "held_rms_err_v_mm_s": 0.3494879252648008,
+      "held_rms_err_w_deg_s": 0.5803539112338771
+    }
+  }
+}

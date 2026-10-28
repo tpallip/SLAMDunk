@@ -41,6 +41,7 @@ void Controller_c::applyConfig() {
     w.window_ms = (unsigned long)c.speed_window_ms;
     w.min_counts = c.speed_min_counts;
     w.stall_min_ms = (unsigned long)c.stall_min_ms;
+    w.accel_mm_s2 = c.accel_mm_s2;
   }
 
   mover.kp = c.move_kp;
@@ -48,6 +49,16 @@ void Controller_c::applyConfig() {
   mover.min_speed_mm_s = c.move_min_speed_mm_s;
   mover.tolerance_mm = c.move_tolerance_mm;
   mover.stop_lead_s = c.move_stop_lead_s;
+  mover.turn_stop_lead_s = c.turn_stop_lead_s;
+  mover.sync_kp = c.move_sync_kp;
+
+  twist.kp = c.twist_kp;
+  twist.max_error_mm = c.twist_max_error_mm;
+  twist.max_speed_mm_s = c.manual_max_speed_mm_s;
+  twist.accel_mm_s2 = c.accel_mm_s2;
+  twist.stop_speed_mm_s = c.move_min_speed_mm_s;
+  twist.left_stop_lead_s = c.twist_left_lead_s;
+  twist.right_stop_lead_s = c.twist_right_lead_s;
 }
 
 void Controller_c::reset() {
@@ -115,6 +126,7 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
   enc_ok = robot.getEncoders();
   enc_us = enc_start_us + (micros() - enc_start_us) / 2;
   if (enc_ok) {
+    last_enc_ok_ms = now;
     odometry.update(robot.getLeftEncoderCount(), robot.getRightEncoderCount());
 
     // Wheel speeds for the "vel" command, using the odometry's wheel geometry.
@@ -153,23 +165,40 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
     // Stop if the client has gone, or (when enabled) if "pwm"/"vel" commands
     // stopped arriving, so a lost connection can't leave the robot driving.
     // A "move" ends by itself (or at its own deadline), so it isn't resent
-    // and the command timeout doesn't apply while it runs. Serial can't tell
+    // and the command timeout doesn't apply while it runs; nor while "cmd 0 0"
+    // slows down to a stop, which takes under a second. Serial can't tell
     // whether anyone is listening, so when driven over USB only the timeout
     // applies.
     unsigned long timeout_ms = (unsigned long)config.values.manual_timeout_ms;
-    bool timed_out = !mover.isActive() && now - manual_cmd_ms > timeout_ms;
+    bool timed_out = !mover.isActive() && !twist.isStopping() && now - manual_cmd_ms > timeout_ms;
     bool link_lost = manual_source == FROM_WIFI && !server.clientConnected();
     if(link_lost || timed_out) {
       clearManual();
+    }
+    // Checked after the commands above, so a "vel" that arrives while the
+    // encoders are out stops before it drives.
+    bool driving = manual_vel && (mover.isActive() || twist.isActive() || left_speed.getTarget() != 0.0f
+                                  || right_speed.getTarget() != 0.0f);
+    if(driving && now - last_enc_ok_ms > ENCODER_LOSS_MS) {
+      clearManual();
+      reply(server, manual_source, "#E no encoder reading for %lu ms, stopped\n", now - last_enc_ok_ms);
     }
     if(mover.isActive()) {
       float left_target, right_target;
       if(!mover.update(robot.getLeftEncoderCount(), robot.getRightEncoderCount(), now,
                        left_target, right_target)) {
-        reply(server, manual_source, "#I move %s: left %+.2f mm, right %+.2f mm still to go\n",
-              mover.timedOut() ? "timed out" : "done",
+        reply(server, manual_source, "#I %s %s: left %+.2f mm, right %+.2f mm still to go\n",
+              move_name, mover.timedOut() ? "timed out" : "done",
               mover.getLeftError(), mover.getRightError());
       }
+      left_speed.setTarget(left_target);
+      right_speed.setTarget(right_target);
+    }
+    if(twist.isActive()) {
+      float left_target, right_target;
+      twist.update(robot.getLeftEncoderCount(), robot.getRightEncoderCount(),
+                   (now - last_manual_ms) / 1000.0f, left_speed.getSpeed(), right_speed.getSpeed(),
+                   left_target, right_target);
       left_speed.setTarget(left_target);
       right_speed.setTarget(right_target);
     }
@@ -199,12 +228,28 @@ bool Controller_c::lineDetected(const Robot_c &robot) const {
   return false;
 }
 
+void Controller_c::startMove(Robot_c &robot, const char *name, float left_mm, float right_mm,
+                             float speed_mm_s, CmdSource source, unsigned long now) {
+  float counts_per_rev = odometry.encoderCountsPerRevolution;
+  manual_vel = true;
+  move_name = name;
+  float max_speed = config.values.manual_max_speed_mm_s;
+  mover.start(left_mm, right_mm, constrain(fabsf(speed_mm_s), 0.0f, max_speed),
+              robot.getLeftEncoderCount(), robot.getRightEncoderCount(),
+              TWO_PI * odometry.leftWheelRadiusMm / counts_per_rev,
+              TWO_PI * odometry.rightWheelRadiusMm / counts_per_rev, now, strcmp(name, "turn") == 0);
+  twist.stop();
+  manual_cmd_ms = now;
+  manual_source = source;
+}
+
 void Controller_c::clearManual() {
   manual_left_pwm = 0.0f;
   manual_right_pwm = 0.0f;
   left_speed.reset();
   right_speed.reset();
   mover.cancel();
+  twist.stop();
 }
 
 void Controller_c::startDeadbandTest(Robot_c &robot, RobotWifiAP_c &server, const char *cmd,
@@ -622,7 +667,7 @@ void Controller_c::handleCommand(Robot_c &robot, RobotWifiAP_c &server, const ch
       return;
     }
     if(strncmp(cmd, "pwm ", 4) == 0 || strncmp(cmd, "vel ", 4) == 0 ||
-       strncmp(cmd, "move ", 5) == 0 || strncmp(cmd, "test ", 5) == 0 || strcmp(cmd, "start") == 0 ||
+       strncmp(cmd, "move ", 5) == 0 || strncmp(cmd, "turn ", 5) == 0 || strncmp(cmd, "cmd ", 4) == 0 || strncmp(cmd, "test ", 5) == 0 || strcmp(cmd, "start") == 0 ||
        strncmp(cmd, "set ", 4) == 0 || strcmp(cmd, "config reset") == 0) {
       reply(server, source, "#E a test is running; send stop first\n");
       return;
@@ -661,6 +706,7 @@ void Controller_c::handleCommand(Robot_c &robot, RobotWifiAP_c &server, const ch
     if(usr_mode == MANUAL_CTRL && isfinite(left) && isfinite(right)) {
       manual_vel = false;
       mover.cancel();
+      twist.stop();
       left_speed.reset();
       right_speed.reset();
       float max_pwm = config.values.manual_max_pwm;
@@ -674,6 +720,7 @@ void Controller_c::handleCommand(Robot_c &robot, RobotWifiAP_c &server, const ch
     if(usr_mode == MANUAL_CTRL && isfinite(left) && isfinite(right)) {
       manual_vel = true;
       mover.cancel();
+      twist.stop();
       float max_speed = config.values.manual_max_speed_mm_s;
       left_speed.setTarget(constrain(left, -max_speed, max_speed));
       right_speed.setTarget(constrain(right, -max_speed, max_speed));
@@ -681,17 +728,49 @@ void Controller_c::handleCommand(Robot_c &robot, RobotWifiAP_c &server, const ch
       manual_source = source;
     }
   }
-  else if(sscanf(cmd, "move %f", &left) == 1) {
-    if(usr_mode == MANUAL_CTRL && isfinite(left)) {
-      float counts_per_rev = odometry.encoderCountsPerRevolution;
+  else if(strncmp(cmd, "cmd ", 4) == 0) {
+    if(sscanf(cmd, "cmd %f %f", &left, &right) != 2) {
+      reply(server, source, "#E usage: cmd <v mm/s> <omega deg/s>\n");
+    }
+    else if(usr_mode == MANUAL_CTRL && isfinite(left) && isfinite(right)) {
       manual_vel = true;
-      float max_mm = config.values.move_max_distance_mm;
-      mover.start(constrain(left, -max_mm, max_mm),
+      mover.cancel();
+      if(left == 0.0f && right == 0.0f && !twist.isActive()) {
+        left_speed.setTarget(0.0f);
+        right_speed.setTarget(0.0f);
+      } else {
+        float counts_per_rev = odometry.encoderCountsPerRevolution;
+        float max_speed = config.values.manual_max_speed_mm_s;
+        twist.set(constrain(left, -max_speed, max_speed), right, config.values.wheel_separation_mm,
                   robot.getLeftEncoderCount(), robot.getRightEncoderCount(),
                   TWO_PI * odometry.leftWheelRadiusMm / counts_per_rev,
-                  TWO_PI * odometry.rightWheelRadiusMm / counts_per_rev, now);
+                  TWO_PI * odometry.rightWheelRadiusMm / counts_per_rev);
+      }
       manual_cmd_ms = now;
       manual_source = source;
+    }
+  }
+  else if(strncmp(cmd, "move ", 5) == 0) {
+    float speed = 0.0f;
+    if(sscanf(cmd, "move %f %f", &left, &speed) < 1) {
+      reply(server, source, "#E usage: move <mm> [speed]\n");
+    }
+    else if(usr_mode == MANUAL_CTRL && isfinite(left) && isfinite(speed)) {
+      float max_mm = config.values.move_max_distance_mm;
+      left = constrain(left, -max_mm, max_mm);
+      startMove(robot, "move", left, left, speed, source, now);
+    }
+  }
+  else if(strncmp(cmd, "turn ", 5) == 0) {
+    float speed = 0.0f;
+    if(sscanf(cmd, "turn %f %f", &left, &speed) < 1) {
+      reply(server, source, "#E usage: turn <deg> [speed]\n");
+    }
+    else if(usr_mode == MANUAL_CTRL && isfinite(left) && isfinite(speed)) {
+      // each wheel's arc: angle times half the wheel separation
+      float arc_mm = constrain(left, -MAX_TURN_DEG, MAX_TURN_DEG) * DEG_TO_RAD
+                     * config.values.wheel_separation_mm / 2.0f;
+      startMove(robot, "turn", -arc_mm, arc_mm, speed, source, now);
     }
   }
   else if(strncmp(cmd, "test deadband", 13) == 0) {

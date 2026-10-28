@@ -1,0 +1,125 @@
+{
+  "frozen": "2026-10-23 17:34:55",
+  "sequence": [
+    [
+      0,
+      1.0
+    ],
+    [
+      45,
+      2.0
+    ],
+    [
+      75,
+      1.5
+    ],
+    [
+      35,
+      2.0
+    ],
+    [
+      21,
+      2.0
+    ],
+    [
+      55,
+      1.5
+    ],
+    [
+      -60,
+      2.0
+    ],
+    [
+      -90,
+      1.5
+    ],
+    [
+      -40,
+      2.0
+    ],
+    [
+      0,
+      2.0
+    ],
+    [
+      65,
+      1.5
+    ],
+    [
+      0,
+      2.0
+    ]
+  ],
+  "model": {
+    "source": {
+      "speed": "bench/1.5_gain floor spin runs 20261014_202947 (dir 1) and _203235 (dir -1): speed = a * pwm + b",
+      "start": "bench/1.2_deadband floor spin runs 20261014_202249 / _202500: 50 % start point",
+      "keep": "bench/1.3_keepturn floor spin runs 20261014_202738 / _202838: median stop PWM",
+      "timing": "bench/1.7_step_response/step_floor: medians of dead time and tau (s)"
+    },
+    "left": {
+      "fwd": {
+        "a": 3.419,
+        "b": -62.0,
+        "start": 32.5,
+        "keep": 25
+      },
+      "rev": {
+        "a": 3.762,
+        "b": -75.2,
+        "start": 32.5,
+        "keep": 23
+      },
+      "timing": {
+        "rest": [
+          0.098,
+          0.074
+        ],
+        "up": [
+          0.059,
+          0.067
+        ],
+        "down": [
+          0.04,
+          0.11
+        ],
+        "coast": [
+          0.068,
+          0.044
+        ]
+      }
+    },
+    "right": {
+      "fwd": {
+        "a": 3.852,
+        "b": -47.2,
+        "start": 28.7,
+        "keep": 18
+      },
+      "rev": {
+        "a": 3.811,
+        "b": -45.1,
+        "start": 32.5,
+        "keep": 18
+      },
+      "timing": {
+        "rest": [
+          0.098,
+          0.054
+        ],
+        "up": [
+          0.056,
+          0.056
+        ],
+        "down": [
+          0.05,
+          0.05
+        ],
+        "coast": [
+          0.062,
+          0.042
+        ]
+      }
+    }
+  }
+}

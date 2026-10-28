@@ -33,6 +33,7 @@ struct RobotConfigValues_t {
   float speed_window_ms = 80;
   float speed_min_counts = 6;
   float stall_min_ms = 30;
+  float accel_mm_s2 = 0;
 
   // "move" command
   float move_kp = 3.0f;
@@ -40,6 +41,14 @@ struct RobotConfigValues_t {
   float move_min_speed_mm_s = 15;
   float move_tolerance_mm = 0.2f;
   float move_stop_lead_s = 0.07f;
+  float turn_stop_lead_s = 0.07f;
+  float move_sync_kp = 0.0f;
+
+  // "cmd" command
+  float twist_kp = 4.0f;
+  float twist_max_error_mm = 20.0f;
+  float twist_left_lead_s = 0.088f;   // coast when stopping, s of travel at the wheel's speed
+  float twist_right_lead_s = 0.079f;
 
   // line follower
   float line_threshold = 1400;

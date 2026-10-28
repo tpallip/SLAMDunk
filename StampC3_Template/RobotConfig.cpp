@@ -31,12 +31,20 @@ RobotConfig_c::RobotConfig_c() {
   add("speed_window_ms", &v.speed_window_ms, 30, 150);
   add("speed_min_counts", &v.speed_min_counts, 1, 20);
   add("stall_min_ms", &v.stall_min_ms, 10, 500);
+  add("accel_mm_s2", &v.accel_mm_s2, 0, 5000);
 
   add("move_kp", &v.move_kp, 0, 20);
   add("move_max_speed_mm_s", &v.move_max_speed_mm_s, 5, 250);
   add("move_min_speed_mm_s", &v.move_min_speed_mm_s, 0, 100);
   add("move_tolerance_mm", &v.move_tolerance_mm, 0.05f, 10);
   add("move_stop_lead_s", &v.move_stop_lead_s, 0, 0.5f);
+  add("turn_stop_lead_s", &v.turn_stop_lead_s, 0, 0.5f);
+  add("move_sync_kp", &v.move_sync_kp, 0, 50);
+
+  add("twist_kp", &v.twist_kp, 0, 50);
+  add("twist_max_error_mm", &v.twist_max_error_mm, 0, 200);
+  add("twist_left_lead_s", &v.twist_left_lead_s, 0, 0.5f);
+  add("twist_right_lead_s", &v.twist_right_lead_s, 0, 0.5f);
 
   add("line_threshold", &v.line_threshold, 0, 65535);
   add("base_pwm", &v.base_pwm, 0, 100);

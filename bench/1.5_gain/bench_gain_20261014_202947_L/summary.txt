@@ -1,0 +1,33 @@
+gain L (spin) dir 1 (bench_gain_20261014_202947.csv)
+end: #BE gain done rows=15087 trials=3
+settle 500 ms, hold 1000 ms; holds: 99, stalled: 7
+
+ PWM  holds  speed mm/s   sd   down     up   ripple sd
+ +20      1        31.2     -   31.2      -       36.2   2 stalled
+ +25      1         4.3     -    4.3      -        7.7   5 stalled
+ +30      6        39.2   4.2   40.7   37.8        6.4
+ +35      6        58.0   3.8   56.6   59.5        4.2
+ +40      6        72.7   2.9   74.3   71.2        4.5
+ +45      6        90.5   3.9   89.7   91.3        4.0
+ +50      6       110.0   3.1  109.1  111.0        3.6
+ +55      6       127.3   1.3  127.5  127.1        3.8
+ +60      6       144.8   1.2  145.1  144.6        5.0
+ +65      6       159.4   0.7  159.3  159.4        4.1
+ +70      6       177.6   1.4  176.8  178.4        4.3
+ +75      6       195.5   2.4  194.1  196.9        5.2
+ +80      6       212.9   2.1  211.4  214.3        5.0
+ +85      6       230.8   1.9  229.6  231.9        5.8
+ +90      6       238.4  17.0  231.0  245.8        5.8
+ +95      6       262.8   1.1  262.3  263.3        5.2
++100      6       282.5   1.4  282.6  282.4        4.7
+
+linear fit: speed = 3.419 * pwm -62.0 mm/s, rms residual 6.1 mm/s
+held back PWM [30, 50, 70, 90]: mean error linear 3.8 mm/s, quadratic 3.8 mm/s
+slope between levels: median 3.57, top step 3.95 mm/s per PWM (111% of median)
+down vs up: largest difference -14.8 mm/s at +90
+speed at 100 PWM by trial: 283.8, 281.0, 282.8
+
+suggested config:
+  "left_ff_offset_pwm": 18.1,
+  "left_ff_mm_s_per_pwm": 3.42
+plot: /data/robotic-science-systems/SLAMDunk/bench/1.5_gain/bench_gain_20261014_202947_L/plot.png
