@@ -47,6 +47,8 @@ struct RobotConfigValues_t {
   // "cmd" command
   float twist_kp = 4.0f;
   float twist_max_error_mm = 20.0f;
+  float twist_left_lead_s = 0.088f;   // coast when stopping, s of travel at the wheel's speed
+  float twist_right_lead_s = 0.079f;
 
   // line follower
   float line_threshold = 1400;

@@ -5,8 +5,8 @@
 
   "left_breakaway_pwm": 40,
   "right_breakaway_pwm": 42,
-  "left_run_min_pwm": 28,
-  "right_run_min_pwm": 21,
+  "left_run_min_pwm": 26,
+  "right_run_min_pwm": 19,
   "left_ff_offset_pwm": 19.2,
   "left_ff_mm_s_per_pwm": 3.66,
   "right_ff_offset_pwm": 10.7,
@@ -23,6 +23,8 @@
   "move_sync_kp": 4.0,
   "twist_kp": 4.0,
   "twist_max_error_mm": 20.0,
+  "twist_left_lead_s": 0.058,
+  "twist_right_lead_s": 0.044,
   "line_threshold": 1400,
 
   "update_interval_ms": 10,

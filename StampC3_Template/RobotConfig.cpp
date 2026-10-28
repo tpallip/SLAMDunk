@@ -43,6 +43,8 @@ RobotConfig_c::RobotConfig_c() {
 
   add("twist_kp", &v.twist_kp, 0, 50);
   add("twist_max_error_mm", &v.twist_max_error_mm, 0, 200);
+  add("twist_left_lead_s", &v.twist_left_lead_s, 0, 0.5f);
+  add("twist_right_lead_s", &v.twist_right_lead_s, 0, 0.5f);
 
   add("line_threshold", &v.line_threshold, 0, 65535);
   add("base_pwm", &v.base_pwm, 0, 100);

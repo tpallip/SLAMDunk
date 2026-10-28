@@ -55,6 +55,10 @@ void Controller_c::applyConfig() {
   twist.kp = c.twist_kp;
   twist.max_error_mm = c.twist_max_error_mm;
   twist.max_speed_mm_s = c.manual_max_speed_mm_s;
+  twist.accel_mm_s2 = c.accel_mm_s2;
+  twist.stop_speed_mm_s = c.move_min_speed_mm_s;
+  twist.left_stop_lead_s = c.twist_left_lead_s;
+  twist.right_stop_lead_s = c.twist_right_lead_s;
 }
 
 void Controller_c::reset() {
@@ -161,11 +165,12 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
     // Stop if the client has gone, or (when enabled) if "pwm"/"vel" commands
     // stopped arriving, so a lost connection can't leave the robot driving.
     // A "move" ends by itself (or at its own deadline), so it isn't resent
-    // and the command timeout doesn't apply while it runs. Serial can't tell
+    // and the command timeout doesn't apply while it runs; nor while "cmd 0 0"
+    // slows down to a stop, which takes under a second. Serial can't tell
     // whether anyone is listening, so when driven over USB only the timeout
     // applies.
     unsigned long timeout_ms = (unsigned long)config.values.manual_timeout_ms;
-    bool timed_out = !mover.isActive() && now - manual_cmd_ms > timeout_ms;
+    bool timed_out = !mover.isActive() && !twist.isStopping() && now - manual_cmd_ms > timeout_ms;
     bool link_lost = manual_source == FROM_WIFI && !server.clientConnected();
     if(link_lost || timed_out) {
       clearManual();
@@ -192,7 +197,8 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
     if(twist.isActive()) {
       float left_target, right_target;
       twist.update(robot.getLeftEncoderCount(), robot.getRightEncoderCount(),
-                   (now - last_manual_ms) / 1000.0f, left_target, right_target);
+                   (now - last_manual_ms) / 1000.0f, left_speed.getSpeed(), right_speed.getSpeed(),
+                   left_target, right_target);
       left_speed.setTarget(left_target);
       right_speed.setTarget(right_target);
     }
@@ -729,8 +735,7 @@ void Controller_c::handleCommand(Robot_c &robot, RobotWifiAP_c &server, const ch
     else if(usr_mode == MANUAL_CTRL && isfinite(left) && isfinite(right)) {
       manual_vel = true;
       mover.cancel();
-      if(left == 0.0f && right == 0.0f) {
-        twist.stop();
+      if(left == 0.0f && right == 0.0f && !twist.isActive()) {
         left_speed.setTarget(0.0f);
         right_speed.setTarget(0.0f);
       } else {
