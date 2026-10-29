@@ -44,10 +44,10 @@ Each item should end with a number (with spread), the method used, and where the
 ### Surface (line) sensors DN1–DN5
 | # | Item | Method | Results |
 |---|------|--------|---------|
-| [ ] 3.1 | **Static noise** | Robot stationary on white, then on black: mean and std dev per sensor over ≥ 1000 samples. | |
-| [ ] 3.2 | **Range and per-sensor offsets** | Min/max per sensor on the course surface; derive per-sensor normalisation. | |
-| [ ] 3.3 | **Line threshold validity** | Is `LINE_THRESHOLD = 1400` separable for every sensor, under different room lighting? | |
-| [ ] 3.4 | **Spatial response** | Slide an edge across each sensor in known mm steps; sensor footprint and effective lateral resolution. | |
+| [ ] 3.1 | **Static noise** | Robot stationary on white, then on black: mean and std dev per sensor over ≥ 1000 samples. | Partial (2026-10-29, 166-608 samples at 50 ms): sd about 14 raw counts on white, 17-22 on black, white noise, drift within ±6; about 1 % of the white-to-black span, under 0.1 mm of line position at the tape edge. dn2 and dn5 sit at the 2942 cap on the static black. Needs a 10 ms rerun with ≥ 1000 samples. `bench/3.1_static_noise/` |
+| [ ] 3.2 | **Range and per-sensor offsets** | Min/max per sensor on the course surface; derive per-sensor normalisation. | Levels on the course tape (2026-10-28, line spin run), white / black: dn1 633/1962, dn2 666/2629, dn3 470/1963, dn4 643/2186, dn5 840/2942 (cap). Normalisation not yet in the firmware or twin. `bench/3.4_spatial_response/spread_cmd70_01/` |
+| [ ] 3.3 | **Line threshold validity** | Is `LINE_THRESHOLD = 1400` separable for every sensor, under different room lighting? | Partial (2026-10-29, white only): low light and blinds raise white by 11-37 counts (2-3 % of the span); worst white 937, so 1400 separates on every sensor. But the tape 50 % points run 1216-1891, so 1400 marks the edge at a different place per sensor: normalise per sensor. Black in low light not tested. `bench/3.1_static_noise/` |
+| [x] 3.4 | **Spatial response** | Slide an edge across each sensor in known mm steps; sensor footprint and effective lateral resolution. | Done 2026-10-28 by spinning on the course line instead (`cmd 0 ±70`, 5 turns each way, `tools/sensor_spread.py --line`): Gaussian footprint sigma dn1 2.90, dn2 3.57, dn3 3.54, dn4 3.40, dn5 2.29 mm (10-90 % rise 6-9 mm), 38-40 edges each; agrees with the static-levels fit within 0.1 mm except dn1 (3.45). Tape about 16-17.5 mm wide as seen. `bench/3.4_spatial_response/spread_cmd70_01/` |
 | [ ] 3.5 | **Sim vs real** | Compare real readings with `SurfaceSensorModel` in DigitalTwin for the same positions. | |
 
 ### Encoders and odometry
