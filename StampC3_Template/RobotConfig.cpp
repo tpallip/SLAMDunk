@@ -53,6 +53,32 @@ RobotConfig_c::RobotConfig_c() {
   add("recovery_right_pwm", &v.recovery_right_pwm, -100, 100);
   add("recovery_timeout_ms", &v.recovery_timeout_ms, 0, 60000);
 
+  add("dn1_white", &v.dn1_white, 0, 65535);
+  add("dn2_white", &v.dn2_white, 0, 65535);
+  add("dn3_white", &v.dn3_white, 0, 65535);
+  add("dn4_white", &v.dn4_white, 0, 65535);
+  add("dn5_white", &v.dn5_white, 0, 65535);
+  add("dn1_black", &v.dn1_black, 0, 65535);
+  add("dn2_black", &v.dn2_black, 0, 65535);
+  add("dn3_black", &v.dn3_black, 0, 65535);
+  add("dn4_black", &v.dn4_black, 0, 65535);
+  add("dn5_black", &v.dn5_black, 0, 65535);
+  add("dn1_sigma_mm", &v.dn1_sigma_mm, 0.5f, 20);
+  add("dn2_sigma_mm", &v.dn2_sigma_mm, 0.5f, 20);
+  add("dn3_sigma_mm", &v.dn3_sigma_mm, 0.5f, 20);
+  add("dn4_sigma_mm", &v.dn4_sigma_mm, 0.5f, 20);
+  add("dn5_sigma_mm", &v.dn5_sigma_mm, 0.5f, 20);
+  add("line_width_mm", &v.line_width_mm, 1, 100);
+  add("line_detect_level", &v.line_detect_level, 0.05f, 1);
+
+  add("line_mode", &v.line_mode, 0, 1);
+  add("line_speed_mm_s", &v.line_speed_mm_s, 0, 250);
+  add("line_lookahead_mm", &v.line_lookahead_mm, 5, 200);
+  add("line_kp", &v.line_kp, 0, 10);
+  add("line_kd", &v.line_kd, 0, 50);
+  add("line_accel_mm_s2", &v.line_accel_mm_s2, 0, 5000);
+  add("line_search_deg_s", &v.line_search_deg_s, 0, 400);
+
   RobotConfigValues_t defaults;
   add("manual_max_pwm", &v.manual_max_pwm, 0, defaults.manual_max_pwm);
   add("manual_max_speed_mm_s", &v.manual_max_speed_mm_s, 0, defaults.manual_max_speed_mm_s);

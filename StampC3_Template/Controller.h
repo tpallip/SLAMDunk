@@ -8,6 +8,7 @@
 #include "WheelSpeedController.h"
 #include "MoveController.h"
 #include "TwistController.h"
+#include "LineSensor.h"
 #include "DeadbandTest.h"
 #include "KeepTurnTest.h"
 #include "GainTest.h"
@@ -41,6 +42,8 @@ class Controller_c {
     const char *move_name = "move";    // "move" or "turn", for the done/timed out reply
     /** @brief Body velocity for the "cmd" command, through the speed controllers. */
     TwistController_c twist;
+    /** @brief Normalised surface readings and the line's offset, updated every cycle; "line" reports them. */
+    LineSensor_c line;
     /** @brief "test deadband" command. */
     DeadbandTest_c deadband;
     /** @brief "test keepturn" command. */
@@ -141,6 +144,8 @@ class Controller_c {
     TaskTimer_c update_timer;
     TaskTimer_c telemetry_timer;
     unsigned long recovery_start_ms;
+    unsigned long last_line_ms = 0;    // previous line-follower cycle, for the speed PI's dt
+    float last_offset_mm = 0.0f;       // previous line offset, for line_kd
 
     /** @brief Returns whether cached DN3 is at or above config line_threshold. */
     bool lineDetected(const Robot_c &robot) const;
@@ -175,6 +180,8 @@ class Controller_c {
 
     /** @brief Applies the nominal controller behaviour for the current mode. */
     void runLineFollower(Robot_c &robot, unsigned long now);
+    /** @brief line_mode 1: steers on the line sensor's offset through the wheel speed controllers. */
+    void runOffsetFollower(Robot_c &robot, unsigned long now);
 
     /**
      * @brief Sends the current controller and robot snapshot as one CSV record.
