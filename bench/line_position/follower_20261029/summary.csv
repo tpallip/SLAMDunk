@@ -1,0 +1,6 @@
+run,follower,settings,started,direction,duration_s,turns,distance_mm,speed_mm_s,s_per_lap,lost_n,lost_s,lost_max_s,offset_median_mm,offset_p95_mm
+new_100_3s,offset,"speed 100, kp 1.5, kd 0","start, 3 s",clockwise,2.99,-0.20,233.95,78.19,nan,2,0.14,0.07,1.23,27.71
+new_100,offset,"speed 100, kp 1.5, kd 0","start, 20 s",clockwise,20.04,-1.52,1556.71,77.68,13.16,12,0.87,0.11,4.93,27.08
+old,old (raw PWM),"base_pwm 45, gain 0.01","start, 20 s",anticlockwise,20.04,4.26,1155.80,57.67,nan,19,5.85,1.16,5.30,30.91
+new_150,offset,"speed 150, kp 1.5, kd 0.5","start, 20 s",anticlockwise,20.04,2.44,2130.97,106.35,8.20,11,1.55,0.22,5.03,30.70
+new_150_button,offset,"speed 150, kp 1.5, kd 0.5","button, stopped by hand",anticlockwise,122.58,14.08,13286.96,108.39,8.71,57,8.05,0.24,4.73,30.69
