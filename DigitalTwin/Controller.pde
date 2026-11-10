@@ -11,8 +11,11 @@ class Controller_c {
   final int TELEMETRY_INTERVAL_MS = 50;
   final int RECOVERY_TIMEOUT_MS = 5000;
   final float LINE_THRESHOLD = 1400;
-  // Keep these values aligned with StampC3_Template/Controller.h.
-  final float BASE_PWM = 45;
+  // Keep these values aligned with StampC3_Template/Controller.h, except
+  // BASE_PWM: the twin's motor model (MotorsModel_c) gives 1.25 mm/s per PWM,
+  // so 70 drives the straights at 87.5 mm/s, near the real robot's 90 mm/s on
+  // the course with line_mode 1 (the firmware's base_pwm 45 would give 56 mm/s here).
+  final float BASE_PWM = 70;
   final float LINE_FOLLOW_GAIN = 0.01;
   final float RECOVERY_LEFT_PWM = -35.0;
   final float RECOVERY_RIGHT_PWM = 35.0;
