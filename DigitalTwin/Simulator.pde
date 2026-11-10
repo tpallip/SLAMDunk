@@ -21,6 +21,16 @@ class Simulator {
   final String tcpHost = useLoggerHub ? "127.0.0.1" : "192.168.4.1";
   final int tcpPort = useLoggerHub ? 9200 : 80;
   final int tcpRetryPeriodMs = 2000;
+  /**
+   * @brief Map pose where the real robot is placed before a live run: on the
+   * left line, halfway down, facing down the page. Same as Robot_c's start.
+   * @details The robot's odometry starts at (0, 0, 0) wherever it is put down,
+   * so its x axis points the way it faces. Live poses are taken relative to
+   * the robot's pose at start and placed on the map from here; see toMap().
+   */
+  final float homeX = 0.0;
+  final float homeY = 0.0;
+  final float homeTheta = -PI / 2.0;
   final int tcpConnectTimeoutMs = 250;
   final float minimumZoom = 0.25;
   final float maximumZoom = 4.0;
@@ -485,7 +495,7 @@ class Simulator {
     TCPTelemetry_c copy = sample.copy();
     if (simulatorMode != LIVE_COMPARISON) return;
 
-    if (liveRunning) tcpQueue.add(copy);
+    if (liveRunning) tcpQueue.add(toMap(copy));
 
     if (sample.signal == 0) {
       armedPose = sample.copy();
@@ -494,15 +504,34 @@ class Simulator {
     if (liveArmed && !liveRunning && previousTcpSignal == 0 && sample.signal == 1) {
       controller.reset();
       controller.setSignal(1);
-      robot.resetForRun(armedPose.x, armedPose.y, armedPose.theta,
+      robot.resetForRun(homeX, homeY, homeTheta,
         armedPose.encoderLeft, armedPose.encoderRight);
       liveStartTcpMs = sample.timestampMs;
       liveStartSimulationMs = robot.getMillis();
-      ghost = armedPose.copy();
+      ghost = toMap(armedPose);
       liveRunning = true;
       tcpQueue.clear();
     }
     previousTcpSignal = sample.signal;
+  }
+
+  /**
+   * @brief Puts a robot-reported pose on the map.
+   * @details Takes the pose relative to the robot's pose at start (armedPose),
+   * turns it by the difference between the home heading and the robot's
+   * heading at start, and adds the home pose. With the robot on the home mark,
+   * its odometry's "forward" (+x) becomes the home heading on the map.
+   * @return A copy with x, y and theta in map coordinates.
+   */
+  TCPTelemetry_c toMap(TCPTelemetry_c sample) {
+    TCPTelemetry_c result = sample.copy();
+    float dx = sample.x - armedPose.x;
+    float dy = sample.y - armedPose.y;
+    float turn = homeTheta - armedPose.theta;
+    result.x = homeX + dx * cos(turn) - dy * sin(turn);
+    result.y = homeY + dx * sin(turn) + dy * cos(turn);
+    result.theta = sample.theta + turn;
+    return result;
   }
 
   /** @brief Clears buffered TCP state and disarms the live-comparison run. */
