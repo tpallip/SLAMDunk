@@ -1,0 +1,5 @@
+run: bench/line_position/follower_20261110/raw/run.csv, 64 s following, 4.75 laps anticlockwise (13.4 s a lap), line_speed_mm_s 90
+forward speed (50 ms) p5 / median / p95: 3 / 77 / 97 mm/s
+line lost 25 times (5.3 a lap), median 0.18 s, longest 0.24 s, 4.0 s in all
+left wheel: PWM forward/reverse flips 471 (7.4/s), largest change in one cycle 111 PWM, at the run-min floor 25 % of the time, speed -154 to 160 mm/s
+right wheel: PWM forward/reverse flips 47 (0.7/s), largest change in one cycle 90 PWM, at the run-min floor 9 % of the time, speed 0 to 171 mm/s

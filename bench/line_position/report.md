@@ -125,10 +125,51 @@ anticlockwise, about 0.33 % of the 360 deg turned. The robot follows the same
 square every lap, so this is odometry heading error, the same kind as the
 arc runs' (`bench/twist_test/arc20_*_end_pose_truth.md`).
 
+### Corners jerk the wheels (`follower_20261110/`)
+
+**In short:** at every corner the inner wheel's motor flipped between forward
+and reverse many times a second, and the robot lost the line for a moment
+and spun. Both made the speed jump. Fixed in the firmware since (below), not
+yet run on the robot.
+
+Run 2026-11-10, `line_speed_mm_s` 90, 64 s, 4.75 laps anticlockwise (so the
+left wheel is on the inside). `analyse.py` gives these numbers
+(`summary.txt`):
+
+| | Left (inner) wheel | Right (outer) wheel |
+|---|---|---|
+| PWM flips between forward and reverse | 471 (7.4 a second) | 47 (0.7 a second) |
+| Largest PWM change in one 10 ms cycle | 111 | 90 |
+| Time at the run-min floor | 25 % | 9 % |
+| Wheel speed range | -154 to 160 mm/s | 0 to 171 mm/s (target 90) |
+
+The robot lost the line 25 times (about 5 a lap: once per corner, plus one),
+for 0.18 s each (longest 0.24 s). It lapped in 13.4 s; straights at 77-97
+mm/s.
+
+Three causes, all inside half a second at a corner:
+
+1. **Inner wheel chatter.** Pure pursuit asked the inner wheel for about
+   -15 to +20 mm/s. Near 0, the speed controller's direction follows the
+   sign of the target and the run-min floor holds at least 26 PWM, so the
+   PWM jumped between +26 and -26.
+2. **Search spin.** A lost line switched straight to a ±66 mm/s spin and
+   back 0.18 s later.
+3. **Overshoot after the switch.** The speed controllers' integrals built
+   up during the jumps; the outer wheel then ran at up to 171 mm/s.
+
+Fix (commit 559c237): the curvature is capped so the inner wheel stops
+instead of reversing, wheel targets under `line_min_wheel_mm_s` (15) are 0,
+losses shorter than `line_lost_hold_ms` (200) steer on the last offset
+before any spin, and both integrals are cleared when the spin starts or
+ends. Replaying the logged offsets through the new rules: no reversing or
+0-15 mm/s targets on the inner wheel (719 and 923 records before), and
+0.16 s of spinning instead of 3.96 s. That is a check of the rules, not of
+the robot, which would have driven differently.
+
 ## Still to do
 
+- Run the corner fix on the robot and rerun `analyse.py` on the new log.
 - Straight passes across the line at known angles (`cmd 60 0`) against the
   grid: the direct check of the offset, without the spin geometry.
-- Corners: the 0.1-0.2 s losses could go with a longer search pull or by
-  using the residual (it jumps to about 0.2 at a corner) to turn early.
 - Same follower in the DigitalTwin (TODO 3.5).
