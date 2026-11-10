@@ -28,6 +28,10 @@ USE_TELEOP = True         # accept commands from tools/teleop.py (--teleop/--no-
 TELEOP_HOST = "127.0.0.1" # local only, so nobody else on the network can drive the robot
 TELEOP_PORT = 9100
 MAX_PENDING_PINGS = 1000  # forwarded pings still waiting for the robot's "#P" answer
+USE_HUB = True            # pass everything the robot sends on to any number of local clients (--hub/--no-hub)
+HUB_HOST = "127.0.0.1"    # local only
+HUB_PORT = 9200
+HUB_MAX_QUEUED = 1 << 20  # bytes waiting for one hub client before it is dropped as stuck
 HEADING_ARROW_MM = 30     # length of the heading arrow drawn at the robot
 SURFACE_MAX = 2942        # highest surface reading (black, or robot lifted)
 LINE_THRESHOLD = 1400     # firmware default line_threshold, drawn on the profile
@@ -438,6 +442,93 @@ class TeleopServer:
         self.listener.close()
 
 
+class TelemetryHub:
+    """Local TCP port that passes every line from the robot on to any number of clients.
+
+    The robot accepts one TCP client, which is the logger. The hub lets other
+    programs (the DigitalTwin, plotting or analysis scripts) see the same data
+    at the same time: every telemetry record and every "#" reply, unchanged,
+    one per line. It is receive-only: anything a client sends is ignored, so
+    no client can drive the robot by accident and a client leaving doesn't
+    stop it. Commands go through the teleop port.
+
+    Sends never block the logger. A client that falls behind has its lines
+    queued and sent when it can take them; one that falls HUB_MAX_QUEUED bytes
+    behind is disconnected.
+    """
+
+    def __init__(self, host, port, robot):
+        self.robot = robot   # "host:port" of the robot, for the greeting
+        self.listener = socket.create_server((host, port))
+        self.listener.setblocking(False)
+        self.clients = {}    # socket -> bytes not yet sent to it
+
+    def read_sockets(self):
+        """Sockets to watch for new connections, or for clients leaving."""
+        return [self.listener] + list(self.clients)
+
+    def write_sockets(self):
+        """Clients with queued lines, to watch for room to send."""
+        return [c for c, queued in self.clients.items() if queued]
+
+    def accept(self):
+        try:
+            conn, addr = self.listener.accept()
+        except BlockingIOError:
+            return
+        conn.setblocking(False)
+        conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        # "#" so clients that parse telemetry skip it like a robot reply.
+        self.clients[conn] = f"#hub connected to logger, robot at {self.robot}\n".encode()
+        self.flush(conn)
+        log.info("hub client connected from %s:%s (%d connected)", *addr, len(self.clients))
+
+    def handle_readable(self, conn):
+        """Discards what a client sent; drops it if it has gone."""
+        try:
+            data = conn.recv(4096)
+        except BlockingIOError:
+            return
+        except OSError:
+            data = b""
+        if not data:
+            self.drop(conn, "disconnected")
+
+    def publish(self, line):
+        """Queues one line for every client and sends what each can take now."""
+        for conn in list(self.clients):
+            self.clients[conn] += line + b"\n"
+            self.flush(conn)
+
+    def flush(self, conn):
+        queued = self.clients.get(conn)
+        if not queued:
+            return
+        try:
+            sent = conn.send(queued)
+        except BlockingIOError:
+            sent = 0
+        except OSError:
+            self.drop(conn, "connection lost")
+            return
+        queued = queued[sent:]
+        if len(queued) > HUB_MAX_QUEUED:
+            self.drop(conn, "stopped reading")
+            return
+        self.clients[conn] = queued
+
+    def drop(self, conn, why):
+        self.clients.pop(conn, None)
+        conn.close()
+        log.info("hub client %s (%d connected)", why, len(self.clients))
+
+    def close(self):
+        for conn in list(self.clients):
+            conn.close()
+        self.clients.clear()
+        self.listener.close()
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Stream SLAMDunk telemetry to a table and Rerun.")
     parser.add_argument("--host", default=HOST, help=f"robot address (default: {HOST})")
@@ -457,6 +548,11 @@ def parse_args():
     parser.add_argument(
         "--teleop", action=argparse.BooleanOptionalAction, default=USE_TELEOP,
         help=f"accept commands from tools/teleop.py on {TELEOP_HOST}:{TELEOP_PORT}",
+    )
+    parser.add_argument(
+        "--hub", action=argparse.BooleanOptionalAction, default=USE_HUB,
+        help=f"pass everything from the robot on to clients of {HUB_HOST}:{HUB_PORT} "
+             "(the DigitalTwin, scripts)",
     )
     parser.add_argument(
         "--config", metavar="FILE", type=Path,
@@ -535,6 +631,14 @@ def main():
         except OSError as e:
             log.error("teleop disabled, can't listen on port %s: %s", TELEOP_PORT, e)
 
+    hub = None
+    if args.hub:
+        try:
+            hub = TelemetryHub(HUB_HOST, HUB_PORT, f"{args.host}:{args.port}")
+            log.info("hub: clients can read the robot's data on port %s", HUB_PORT)
+        except OSError as e:
+            log.error("hub disabled, can't listen on port %s: %s", HUB_PORT, e)
+
     if args.csv:
         LOG_DIR.mkdir(exist_ok=True)
         # Line buffered, so every record is on disk even if the logger is killed.
@@ -550,8 +654,18 @@ def main():
             # Wait for whichever comes first: robot telemetry, a new teleop
             # connection, or a teleop command. The short timeout lets the
             # no-data check run even when nothing arrives.
-            watched = [sock] + (teleop.sockets() if teleop else [])
-            readable, _, _ = select.select(watched, [], [], 0.1)
+            watched = [sock] + (teleop.sockets() if teleop else []) + (hub.read_sockets() if hub else [])
+            writable_wanted = hub.write_sockets() if hub else []
+            readable, writable, _ = select.select(watched, writable_wanted, [], 0.1)
+
+            if hub is not None:
+                if hub.listener in readable:
+                    hub.accept()
+                for conn in readable:
+                    if conn in hub.clients:
+                        hub.handle_readable(conn)
+                for conn in writable:
+                    hub.flush(conn)
 
             if teleop is not None:
                 if teleop.listener in readable:
@@ -608,6 +722,8 @@ def main():
                 line = line.strip()
                 if line.startswith(b"#"):
                     # A reply to a command, not a telemetry record.
+                    if hub is not None:
+                        hub.publish(line)
                     if teleop is not None:
                         teleop.robot_reply(line, received_at)
                     try:
@@ -621,7 +737,9 @@ def main():
                 text = line.decode("utf-8", errors="replace")
                 fields = parse_line(text)
                 if fields is not None:
-                    # Passed on first, so Rerun's work doesn't delay the client.
+                    # Passed on first, so Rerun's work doesn't delay the clients.
+                    if hub is not None:
+                        hub.publish(line)
                     if teleop is not None and teleop.telemetry:
                         teleop.send(line)
                     latest = fields
@@ -640,6 +758,8 @@ def main():
     bench.close("logger stopped before #BE")
     if teleop is not None:
         teleop.close()
+    if hub is not None:
+        hub.close()
     if csv_writer is not None:
         csv_file.close()
         log.info("records saved to %s", csv_path)

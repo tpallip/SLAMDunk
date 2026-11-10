@@ -158,11 +158,17 @@ affects tuning and odometry. Note the charge state in any benchmark.**
 
 1. Install Processing 4 from <https://processing.org/download>.
 2. Open `DigitalTwin/DigitalTwin.pde`.
-3. Run it. It works standalone as a simulator. For live comparison it connects
-   to the robot at `192.168.4.1:80` (set in `DigitalTwin/Simulator.pde`).
+3. Run it. It works standalone as a simulator. For live comparison (`M`) it
+   reads the robot's telemetry from the logger's hub at `127.0.0.1:9200`, so
+   start `tools/logger.py` first.
 
-The robot serves only **one TCP client**, so the Digital Twin and the logger
-cannot both be connected over WiFi at the same time.
+The robot serves only **one TCP client**, which is the logger. The logger passes
+everything the robot sends on to any number of local clients on port 9200 (the
+hub, `--no-hub` to turn it off): every telemetry record and `#` reply, one per
+line, after a `#hub connected ...` greeting. The hub is receive-only; commands
+go through the teleop port (9100). To connect the twin straight to the robot
+instead, without the logger, set `useLoggerHub = false` in
+`DigitalTwin/Simulator.pde`.
 
 ---
 

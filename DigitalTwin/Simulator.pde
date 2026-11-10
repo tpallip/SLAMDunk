@@ -11,9 +11,15 @@ class Simulator {
   // Mirrors the physical robot's 10 ms update interval.
   final int simulationUpdateIntervalMs = 10;
   final int maximumCatchUpSteps = 10;
-  /** @brief Default StampC3 access-point address for live comparison. */
-  final String tcpHost = "192.168.4.1";
-  final int tcpPort = 80;
+  /**
+   * @brief Where live-comparison telemetry comes from.
+   * @details true: the logger's hub (tools/logger.py, 127.0.0.1:9200), so the
+   * logger and the twin run together. false: straight to the StampC3's access
+   * point (192.168.4.1:80), which takes one client, so not with the logger.
+   */
+  final boolean useLoggerHub = true;
+  final String tcpHost = useLoggerHub ? "127.0.0.1" : "192.168.4.1";
+  final int tcpPort = useLoggerHub ? 9200 : 80;
   final int tcpRetryPeriodMs = 2000;
   final int tcpConnectTimeoutMs = 250;
   final float minimumZoom = 0.25;
