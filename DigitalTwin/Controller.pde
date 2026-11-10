@@ -57,7 +57,7 @@ class Controller_c {
    * @note No update occurs until UPDATE_INTERVAL_MS has elapsed in simulation
    * time.
    */
-  void update(RobotSimulation_c robot) {
+  void update(Robot_c robot) {
     long now = robot.getMillis();
     
     if( !update_timer.isReady(now) ) {
@@ -83,14 +83,14 @@ class Controller_c {
   
   
   /** @brief Tests whether any surface channel is at or above the line threshold. */
-  boolean lineDetected(RobotSimulation_c robot) {
+  boolean lineDetected(Robot_c robot) {
     if (robot.surface.reading[2] >= LINE_THRESHOLD) return true;
     return false;
   }
   
   
   /** @brief Applies following, search, or stopped motor commands. */
-  void runLineFollower(RobotSimulation_c robot, long now) {
+  void runLineFollower(Robot_c robot, long now) {
     boolean detected = lineDetected(robot);
     if (!detected && mode == FOLLOWING) {
       mode = SEARCHING;
@@ -121,6 +121,6 @@ class Controller_c {
    * @note Simulator owns TCP reception and graphing. This empty method keeps
    * the 50 ms controller task visible without creating a second transport.
    */
-  void publishTelemetry(RobotSimulation_c robot) {
+  void publishTelemetry(Robot_c robot) {
   }
 }
