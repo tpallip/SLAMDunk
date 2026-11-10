@@ -146,6 +146,7 @@ class Controller_c {
     unsigned long recovery_start_ms;
     unsigned long last_line_ms = 0;    // previous line-follower cycle, for the speed PI's dt
     float last_offset_mm = 0.0f;       // previous line offset, for line_kd
+    bool line_spinning = false;        // searching by spinning (after line_lost_hold_ms)
 
     /** @brief Returns whether cached DN3 is at or above config line_threshold. */
     bool lineDetected(const Robot_c &robot) const;

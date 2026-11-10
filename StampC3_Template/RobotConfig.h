@@ -85,6 +85,8 @@ struct RobotConfigValues_t {
   float line_kd = 0.0f;               // deg/s of turn per mm/s of offset change
   float line_accel_mm_s2 = 1000;      // wheel speed ramp while following
   float line_search_deg_s = 90;       // spin rate looking for a lost line
+  float line_lost_hold_ms = 200;      // keep steering on the last offset this long before spinning
+  float line_min_wheel_mm_s = 15;     // a wheel target below this is 0 while following (no chatter round 0)
 
   // safety limits: the defaults are the maximum, config can only lower them
   float manual_max_pwm = 100;

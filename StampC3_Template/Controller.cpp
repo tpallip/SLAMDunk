@@ -102,6 +102,7 @@ void Controller_c::setSignal(uint8_t requested_signal) {
     right_speed.accel_mm_s2 = config.values.line_accel_mm_s2;
     last_line_ms = 0;   // no previous cycle yet
     last_offset_mm = line.offset_mm;
+    line_spinning = false;
   }
 }
 
@@ -587,26 +588,44 @@ void Controller_c::runOffsetFollower(Robot_c &robot, unsigned long now) {
 
   float half_b = c.wheel_separation_mm / 2;
   float left_target, right_target;
-  if (mode == SEARCHING_FOR_LINE) {
+  // A short loss (mostly at corners, under 0.25 s) is ridden through on the
+  // last offset; only a longer one spins.
+  bool spin = mode == SEARCHING_FOR_LINE
+              && now - recovery_start_ms >= (unsigned long)c.line_lost_hold_ms;
+  if (spin != line_spinning) {
+    // Integral built up for following would overshoot the spin, and the other way round.
+    left_speed.clearIntegral();
+    right_speed.clearIntegral();
+    line_spinning = spin;
+  }
+  if (spin) {
     // Spin towards the side the line was last seen on.
-    float wheel = radians(c.line_search_deg_s) * half_b * (line.offset_mm >= 0.0f ? 1.0f : -1.0f);
+    float wheel = radians(c.line_search_deg_s) * half_b * (last_offset_mm >= 0.0f ? 1.0f : -1.0f);
     left_target = -wheel;
     right_target = wheel;
   } else {
     // Pure pursuit on the point the sensors see: the line's middle at (L, e)
     // ahead of the wheels is reached on an arc of curvature 2e / (L^2 + e^2).
     // The outer wheel is held at line_speed_mm_s, so the robot slows on curves.
-    float e = line.offset_mm;
+    // While the line is lost (before spinning), steer on the last offset.
+    bool seen = mode == FOLLOWING_LINE;
+    float e = seen ? line.offset_mm : last_offset_mm;
     float lookahead = c.line_lookahead_mm;
     float curvature = c.line_kp * 2.0f * e / (lookahead * lookahead + e * e);   // 1/mm, + anticlockwise
+    // No sharper than turning about the inner wheel: the inner wheel stops
+    // instead of reversing, so its speed controller doesn't flip direction.
+    curvature = constrain(curvature, -1.0f / half_b, 1.0f / half_b);
     float v = c.line_speed_mm_s / (1.0f + fabsf(curvature) * half_b);
     float omega = v * curvature;                                               // rad/s
-    if (dt_s > 0.0f) {
+    if (seen && dt_s > 0.0f) {
       omega += radians(c.line_kd) * (e - last_offset_mm) / dt_s;
     }
     last_offset_mm = e;
-    left_target = v - omega * half_b;
-    right_target = v + omega * half_b;
+    left_target = fmaxf(0.0f, v - omega * half_b);
+    right_target = fmaxf(0.0f, v + omega * half_b);
+    // Near 0 the wheel can only be held at run_min_pwm or stopped: stop it.
+    if (left_target < c.line_min_wheel_mm_s) left_target = 0.0f;
+    if (right_target < c.line_min_wheel_mm_s) right_target = 0.0f;
   }
   left_speed.setTarget(left_target);
   right_speed.setTarget(right_target);

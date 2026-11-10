@@ -78,6 +78,8 @@ RobotConfig_c::RobotConfig_c() {
   add("line_kd", &v.line_kd, 0, 50);
   add("line_accel_mm_s2", &v.line_accel_mm_s2, 0, 5000);
   add("line_search_deg_s", &v.line_search_deg_s, 0, 400);
+  add("line_lost_hold_ms", &v.line_lost_hold_ms, 0, 2000);
+  add("line_min_wheel_mm_s", &v.line_min_wheel_mm_s, 0, 100);
 
   RobotConfigValues_t defaults;
   add("manual_max_pwm", &v.manual_max_pwm, 0, defaults.manual_max_pwm);

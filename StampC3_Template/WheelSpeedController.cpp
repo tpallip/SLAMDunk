@@ -50,6 +50,10 @@ bool WheelSpeedController_c::isKicking() const {
 }
 
 
+void WheelSpeedController_c::clearIntegral() {
+  integral_mm = 0.0f;
+}
+
 void WheelSpeedController_c::reset() {
   target_mm_s = 0.0f;
   setpoint_mm_s = 0.0f;

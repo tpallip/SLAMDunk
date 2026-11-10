@@ -45,12 +45,14 @@
   "line_width_mm": 16.5,
   "line_detect_level": 0.5,
   "line_mode": 1,
-  "line_speed_mm_s": 150,
+  "line_speed_mm_s": 90,
   "line_lookahead_mm": 42,
   "line_kp": 1.5,
   "line_kd": 0.5,
   "line_accel_mm_s2": 1000,
   "line_search_deg_s": 90,
+  "line_lost_hold_ms": 200,
+  "line_min_wheel_mm_s": 15,
 
   "update_interval_ms": 10,
   "telemetry_interval_ms": 10
