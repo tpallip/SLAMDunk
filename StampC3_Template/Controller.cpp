@@ -533,10 +533,8 @@ void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
   if (!line_detected && mode == FOLLOWING_LINE) {
     mode = SEARCHING_FOR_LINE;
     recovery_start_ms = now;
-    // The spin runs on raw PWM; an integral built up while it spins would
-    // kick the wheels when following starts again.
-    left_speed.reset();
-    right_speed.reset();
+    // The speed controllers aren't updated during the spin, so their
+    // integrals (the trim the feedforward misses) are kept for after it.
     // An outer sensor may still see where the line went.
     if (line_norm[0] >= level) {
       search_left = true;
@@ -549,8 +547,6 @@ void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
     if (line_detected) {
       mode = FOLLOWING_LINE;
       follow_start_ms = now;
-      left_speed.reset();
-      right_speed.reset();
     } else if (now - recovery_start_ms >= (unsigned long)config.values.recovery_timeout_ms) {
       mode = STOPPED;
     }

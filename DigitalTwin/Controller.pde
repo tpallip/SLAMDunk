@@ -138,10 +138,8 @@ class Controller_c {
     if (!detected && mode == FOLLOWING) {
       mode = SEARCHING;
       recoveryStartMs = now;
-      // The spin runs on raw PWM; an integral built up while it spins would
-      // kick the wheels when following starts again.
-      leftSpeed.reset();
-      rightSpeed.reset();
+      // The speed controllers aren't updated during the spin, so their
+      // integrals (the trim the feedforward misses) are kept for after it.
       // An outer sensor may still see where the line went.
       if (lineNorm[0] >= lineLevel) {
         searchLeft = true;
@@ -154,8 +152,6 @@ class Controller_c {
       if (detected) {
         mode = FOLLOWING;
         followStartMs = now;
-        leftSpeed.reset();
-        rightSpeed.reset();
       } else if (now - recoveryStartMs >= recoveryTimeoutMs) {
         mode = STOPPED;
       }
