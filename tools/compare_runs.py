@@ -16,7 +16,8 @@ per run, then shown as the median and range over each side's runs.
 
 The follower's state is read back from the logged PWM: (recovery_left_pwm,
 recovery_right_pwm) or the same swapped (a right spin) is searching, (0, 0)
-is stopped, anything else is following. Settings and wheel size come from config/lokum.json. Line offsets
+up to the end of the run is stopped, a shorter (0, 0) is the brake before a
+search spin and counts as searching, anything else is following. Settings and wheel size come from config/lokum.json. Line offsets
 come from tools/line_position.py on the logged sensor readings. Twin logs also
 have the true pose, so for those we get the odometry heading error too.
 """
@@ -94,8 +95,12 @@ def metrics(path, cfg, args):
     enc_l, enc_r = col(rows, "enc_left"), col(rows, "enc_right")
 
     rl, rr = cfg["recovery_left_pwm"], cfg["recovery_right_pwm"]
-    searching = ((pwm_l == rl) & (pwm_r == rr)) | ((pwm_l == rr) & (pwm_r == rl))
-    stopped = (pwm_l == 0) & (pwm_r == 0)
+    zero = (pwm_l == 0) & (pwm_r == 0)
+    stopped = np.zeros(len(zero), bool)
+    if zero[-1]:
+        last = np.flatnonzero(~zero)
+        stopped[(last[-1] + 1 if len(last) else 0):] = True
+    searching = ((pwm_l == rl) & (pwm_r == rr)) | ((pwm_l == rr) & (pwm_r == rl)) | (zero & ~stopped)
     following = ~searching & ~stopped
 
     duration = t[-1] - t[0]

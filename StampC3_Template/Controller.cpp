@@ -546,6 +546,12 @@ void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
   }
 
   if (mode == SEARCHING_FOR_LINE) {
+    // Brake first: PWM 0 stops the wheels sooner than reversing them, so the
+    // robot runs less far past a corner before the spin.
+    if (now - recovery_start_ms < (unsigned long)config.values.search_brake_ms) {
+      robot.setMotorPWM(0, 0);
+      return;
+    }
     // recovery_left/right_pwm spin left; swapped they spin right
     if (search_left) {
       robot.setMotorPWM(config.values.recovery_left_pwm, config.values.recovery_right_pwm);

@@ -63,6 +63,7 @@ RobotConfig_c::RobotConfig_c() {
   add("recovery_left_pwm", &v.recovery_left_pwm, -100, 100);
   add("recovery_right_pwm", &v.recovery_right_pwm, -100, 100);
   add("recovery_timeout_ms", &v.recovery_timeout_ms, 0, 60000);
+  add("search_brake_ms", &v.search_brake_ms, 0, 1000);
 
   RobotConfigValues_t defaults;
   add("manual_max_pwm", &v.manual_max_pwm, 0, defaults.manual_max_pwm);

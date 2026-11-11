@@ -69,6 +69,7 @@ struct RobotConfigValues_t {
   float recovery_left_pwm = -35;
   float recovery_right_pwm = 35;
   float recovery_timeout_ms = 5000;
+  float search_brake_ms = 70;   // PWM 0 this long before the search spin; 0 spins at once
 
   // safety limits: the defaults are the maximum, config can only lower them
   float manual_max_pwm = 100;
