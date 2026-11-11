@@ -7,8 +7,11 @@ class Controller_c {
   final int WAITING = 0, FOLLOWING = 1, SEARCHING = 2, STOPPED = 3;
   int signal = 0, mode = WAITING;
   long recoveryStartMs = 0;
+  boolean searchLeft = true;   // side the line was last seen on, so the search turns that way
 
-  float lineThreshold, basePwm, lineFollowGain;
+  float lineLevel, basePwm, lineGain;
+  float[] lineWhite = new float[5], lineBlack = new float[5];
+  float[] lineNorm = new float[5];   // latest readings, 0 white to 1 black
   float recoveryLeftPwm, recoveryRightPwm, recoveryTimeoutMs;
 
   // the robot's own pose estimate, from encoder counts only
@@ -19,11 +22,15 @@ class Controller_c {
   String telemetryLine = null;  // set on cycles where the robot would send telemetry
 
   Controller_c(JSONObject cfg) {
-    // the twin still follows on raw counts; its settings sit under "_twin"
-    JSONObject twin = cfg.hasKey("_twin") ? cfg.getJSONObject("_twin") : cfg;
-    lineThreshold = twin.getFloat("line_threshold", 1400);
+    float[] whites = {633, 666, 470, 643, 840};
+    float[] blacks = {1962, 2629, 1963, 2186, 2942};
+    for (int i = 0; i < 5; i++) {
+      lineWhite[i] = cfg.getFloat("dn" + (i + 1) + "_white", whites[i]);
+      lineBlack[i] = cfg.getFloat("dn" + (i + 1) + "_black", blacks[i]);
+    }
+    lineLevel = cfg.getFloat("line_level", 0.3);
     basePwm = cfg.getFloat("base_pwm", 45);
-    lineFollowGain = twin.getFloat("line_follow_gain", 0.01);
+    lineGain = cfg.getFloat("line_gain", 17.5);
     recoveryLeftPwm = cfg.getFloat("recovery_left_pwm", -35);
     recoveryRightPwm = cfg.getFloat("recovery_right_pwm", 35);
     recoveryTimeoutMs = cfg.getFloat("recovery_timeout_ms", 5000);
@@ -37,6 +44,7 @@ class Controller_c {
     signal = 0;
     mode = WAITING;
     recoveryStartMs = 0;
+    searchLeft = true;
   }
 
   int getSignal() {
@@ -72,33 +80,63 @@ class Controller_c {
     }
   }
 
-  boolean lineDetected(Robot_c robot) {
-    return robot.surface.reading[2] >= lineThreshold;
+  void normaliseSurface(Robot_c robot) {
+    for (int i = 0; i < 5; i++) {
+      float span = max(lineBlack[i] - lineWhite[i], 1.0);
+      lineNorm[i] = constrain((robot.surface.reading[i] - lineWhite[i]) / span, 0, 1);
+    }
+  }
+
+  boolean lineDetected() {
+    // Only the central sensor decides whether the line is there.
+    return lineNorm[2] >= lineLevel;
   }
 
   void runLineFollower(Robot_c robot, long now) {
-    boolean detected = lineDetected(robot);
+    normaliseSurface(robot);
+    boolean detected = lineDetected();
+
     if (!detected && mode == FOLLOWING) {
       mode = SEARCHING;
       recoveryStartMs = now;
+      // An outer sensor may still see where the line went.
+      if (lineNorm[0] >= lineLevel) {
+        searchLeft = true;
+      } else if (lineNorm[4] >= lineLevel) {
+        searchLeft = false;
+      }
     }
-    if (mode == SEARCHING && detected) {
-      mode = FOLLOWING;
-    }
-    if (mode == SEARCHING && now - recoveryStartMs >= recoveryTimeoutMs) {
-      mode = STOPPED;
+
+    if (mode == SEARCHING) {
+      if (detected) {
+        mode = FOLLOWING;
+      } else if (now - recoveryStartMs >= recoveryTimeoutMs) {
+        mode = STOPPED;
+      }
     }
 
     if (mode == STOPPED) {
       robot.setMotorPWM(0, 0);
       return;
     }
+
     if (mode == SEARCHING) {
-      robot.setMotorPWM(recoveryLeftPwm, recoveryRightPwm);
+      // recovery left/right PWMs spin left; swapped they spin right
+      if (searchLeft) {
+        robot.setMotorPWM(recoveryLeftPwm, recoveryRightPwm);
+      } else {
+        robot.setMotorPWM(recoveryRightPwm, recoveryLeftPwm);
+      }
       return;
     }
 
-    float turn = (robot.surface.reading[1] - robot.surface.reading[3]) * lineFollowGain;
+    // Same coverage under DN2 and DN4 gives 0, whichever sensor reads higher.
+    float error = lineNorm[1] - lineNorm[3];
+    // DN2 darker: line on the left
+    if (error != 0) {
+      searchLeft = error > 0;
+    }
+    float turn = error * lineGain;
     robot.setMotorPWM(basePwm - turn, basePwm + turn);
   }
 

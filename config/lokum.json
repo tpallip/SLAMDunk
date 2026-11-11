@@ -44,11 +44,6 @@
   "recovery_right_pwm": 35,
   "recovery_timeout_ms": 5000,
 
-  "_twin": {
-    "line_threshold": 1400,
-    "line_follow_gain": 0.01
-  },
-
   "_surface": {
     "dn1_sigma_mm": 2.90,
     "dn2_sigma_mm": 3.57,
