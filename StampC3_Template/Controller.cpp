@@ -66,6 +66,7 @@ void Controller_c::reset() {
   mode = WAITING;
   usr_mode = AUTO;
   recovery_start_ms = 0;
+  search_left = true;
 }
 
 uint8_t Controller_c::getSignal() const {
@@ -220,11 +221,13 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
 }
 
 bool Controller_c::lineDetected(const Robot_c &robot) const {
-  // Note: only using the central sensor to detect a line.
-  if (robot.surface.reading[2] >= config.values.line_threshold) {
-    return true;
+  // Any of the middle three: DN3 alone slides off the line at corners while
+  // DN2 or DN4 still sees it, and the steering can bring it back.
+  for (int i = 1; i <= 3; i++) {
+    if (robot.surface.reading[i] >= config.values.line_threshold) {
+      return true;
+    }
   }
-
   return false;
 }
 
@@ -507,10 +510,17 @@ void Controller_c::handleConfigCommand(RobotWifiAP_c &server, const char *cmd, C
 
 void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
   bool line_detected = lineDetected(robot);
+  float threshold = config.values.line_threshold;
 
   if (!line_detected && mode == FOLLOWING_LINE) {
     mode = SEARCHING_FOR_LINE;
     recovery_start_ms = now;
+    // An outer sensor may still see where the line went.
+    if (robot.surface.reading[0] >= threshold) {
+      search_left = true;
+    } else if (robot.surface.reading[4] >= threshold) {
+      search_left = false;
+    }
   }
 
   if (mode == SEARCHING_FOR_LINE) {
@@ -527,11 +537,20 @@ void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
   }
 
   if (mode == SEARCHING_FOR_LINE) {
-    robot.setMotorPWM(config.values.recovery_left_pwm, config.values.recovery_right_pwm);
+    // recovery_left/right_pwm spin left; swapped they spin right
+    if (search_left) {
+      robot.setMotorPWM(config.values.recovery_left_pwm, config.values.recovery_right_pwm);
+    } else {
+      robot.setMotorPWM(config.values.recovery_right_pwm, config.values.recovery_left_pwm);
+    }
     return;
   }
 
   float error = (float)robot.surface.reading[1] - (float)robot.surface.reading[3];
+  // DN2 darker: line on the left
+  if (error != 0.0f) {
+    search_left = error > 0.0f;
+  }
   float turn = error * config.values.line_follow_gain;
   float base = config.values.base_pwm;
   robot.setMotorPWM(base - turn, base + turn);

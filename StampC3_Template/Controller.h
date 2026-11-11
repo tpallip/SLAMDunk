@@ -141,8 +141,9 @@ class Controller_c {
     TaskTimer_c update_timer;
     TaskTimer_c telemetry_timer;
     unsigned long recovery_start_ms;
+    bool search_left = true;   // side the line was last seen on, so the search turns that way
 
-    /** @brief Returns whether cached DN3 is at or above config line_threshold. */
+    /** @brief Returns whether any of DN2-DN4 is at or above config line_threshold. */
     bool lineDetected(const Robot_c &robot) const;
 
     /** @brief Clears manual PWM and speed targets, without sending a motor command. */
