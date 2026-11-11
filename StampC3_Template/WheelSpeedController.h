@@ -63,8 +63,6 @@ class WheelSpeedController_c {
     unsigned long stall_min_ms = 30;
     /** @brief How fast the setpoint may rise towards the target, mm/s per second; 0 turns it off. */
     float accel_mm_s2 = 0.0f;
-    /** @brief How fast the setpoint may fall towards zero (slowing or reversing), mm/s per second; 0: at once. */
-    float decel_mm_s2 = 0.0f;
 
     WheelSpeedController_c(float kp, float ki, float ff_offset_pwm, float ff_mm_s_per_pwm,
                            float max_pwm, float breakaway_pwm, float run_min_pwm);

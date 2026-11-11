@@ -48,8 +48,6 @@
   "line_speed_mm_s": 120,
   "line_gain_mm_s": 55,
   "line_min_mm_s": 40,
-  "search_speed_mm_s": 0,
-  "search_decel_mm_s2": 1000,
 
   "_surface": {
     "dn1_sigma_mm": 2.90,

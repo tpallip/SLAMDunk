@@ -16,7 +16,6 @@ class Controller_c {
   float recoveryLeftPwm, recoveryRightPwm, recoveryTimeoutMs;
   float searchBrakeMs, cornerSlow;
   float lineSpeedMmS, lineGainMmS, lineMinMmS;
-  float searchSpeedMmS, searchDecelMmS2;
   long lastLineMs = 0;   // previous follower cycle, for the speed controllers' dt
   long followStartMs = 0;   // when following last (re)started
   float speedWindowMs;
@@ -48,8 +47,6 @@ class Controller_c {
     lineSpeedMmS = cfg.getFloat("line_speed_mm_s", 120);
     lineGainMmS = cfg.getFloat("line_gain_mm_s", 55);
     lineMinMmS = cfg.getFloat("line_min_mm_s", 40);
-    searchSpeedMmS = cfg.getFloat("search_speed_mm_s", 0);
-    searchDecelMmS2 = cfg.getFloat("search_decel_mm_s2", 1000);
     speedWindowMs = cfg.getFloat("speed_window_ms", 80);
     leftSpeed = speedController(cfg, "left");
     rightSpeed = speedController(cfg, "right");
@@ -171,15 +168,6 @@ class Controller_c {
         robot.setMotorPWM(0, 0);
         return;
       }
-      if (speedMode && searchSpeedMmS > 0) {
-        // Spin at wheel speeds; the wheels slow into it at search_decel_mm_s2.
-        leftSpeed.accelMmS2 = rightSpeed.accelMmS2 = 0;
-        leftSpeed.decelMmS2 = rightSpeed.decelMmS2 = searchDecelMmS2;
-        leftSpeed.setTarget(searchLeft ? -searchSpeedMmS : searchSpeedMmS);
-        rightSpeed.setTarget(searchLeft ? searchSpeedMmS : -searchSpeedMmS);
-        robot.setMotorPWM(leftSpeed.update(dtS), rightSpeed.update(dtS));
-        return;
-      }
       // recovery left/right PWMs spin left; swapped they spin right
       if (searchLeft) {
         robot.setMotorPWM(recoveryLeftPwm, recoveryRightPwm);
@@ -211,9 +199,8 @@ class Controller_c {
     float turnMmS = error * lineGainMmS;
     float maxTurn = max(v - lineMinMmS, 0);
     turnMmS = constrain(turnMmS, -maxTurn, maxTurn);
-    // No setpoint ramps: they would delay every steering change.
+    // No setpoint ramp: it would delay every steering change.
     leftSpeed.accelMmS2 = rightSpeed.accelMmS2 = 0;
-    leftSpeed.decelMmS2 = rightSpeed.decelMmS2 = 0;
     leftSpeed.setTarget(v - turnMmS);
     rightSpeed.setTarget(v + turnMmS);
     // Just after a search spin the speed estimate still shows the spin, and

@@ -15,7 +15,6 @@ class WheelSpeedController_c {
   float minCounts = 6;
   long stallMinMs = 30;
   float accelMmS2 = 0;
-  float decelMmS2 = 0;   // how fast the setpoint may fall towards zero; 0: at once
 
   final int HISTORY = 16;    // encoder samples kept; covers windowMs at 10 ms per read
 
@@ -98,19 +97,6 @@ class WheelSpeedController_c {
   }
 
   void stepSetpoint(float dtS) {
-    // Slowing down, or reversing through zero: limited by decelMmS2.
-    boolean slowing = setpointMmS != 0 &&
-      (targetMmS * setpointMmS < 0 || abs(targetMmS) < abs(setpointMmS));
-    if (decelMmS2 > 0 && slowing) {
-      float goal = targetMmS * setpointMmS < 0 ? 0 : targetMmS;
-      float step = decelMmS2 * dtS;
-      if (abs(goal - setpointMmS) <= step) {
-        setpointMmS = goal;
-      } else {
-        setpointMmS += goal > setpointMmS ? step : -step;
-      }
-      return;
-    }
     float direction = targetMmS > 0 ? 1 : -1;
     if (accelMmS2 <= 0) {
       setpointMmS = targetMmS;
