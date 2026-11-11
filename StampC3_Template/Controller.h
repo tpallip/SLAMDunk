@@ -96,6 +96,7 @@ class Controller_c {
 
     /** @brief Applies the nominal controller behaviour for the current mode. */
     void runLineFollower(Robot_c &robot, unsigned long now);
+    void sensorTest(Robot_c &robot, unsigned long now);
 
     /**
      * @brief Sends the current controller and robot snapshot as one CSV record.

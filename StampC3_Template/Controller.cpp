@@ -85,7 +85,8 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
   // The user has started the demonstration, so we run the line following
   // controller code.
   if (signal == 1) {
-    runLineFollower(robot, now);
+    //runLineFollower(robot, now);
+    sensorTest(robot, now);
 
   }
 
@@ -93,7 +94,7 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
   // on WiFi and Serial.
   if (telemetry_timer.isReady(now)) {
     telemetry_timer.resetTimer(now);
-    publishTelemetry(robot, server, now);
+    //publishTelemetry(robot, server, now);
 
   }
 }
@@ -106,6 +107,23 @@ bool Controller_c::lineDetected(const Robot_c &robot) const {
 
   return false;
 }
+
+void Controller_c::sensorTest(Robot_c &robot, unsigned long now) {
+  // Report sensor readings to view on Serial Plotter
+  Serial.print( robot.surface.reading[0] );
+  Serial.print( "," );
+  Serial.print( robot.surface.reading[1] );
+  Serial.print( "," );
+  Serial.print( robot.surface.reading[2] );
+  Serial.print( "," );
+  Serial.print( robot.surface.reading[3] );
+  Serial.print( "," );
+  Serial.print( robot.surface.reading[4] );
+  Serial.print( "\n" );
+
+  // Ensure the robot is stopped
+  robot.setMotorPWM(0,0);
+  }
 
 void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
   bool line_detected = lineDetected(robot);
