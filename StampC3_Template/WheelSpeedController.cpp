@@ -50,6 +50,12 @@ bool WheelSpeedController_c::isKicking() const {
 }
 
 
+float WheelSpeedController_c::feedforward(float speed) const {
+  if (speed == 0.0f) return 0.0f;
+  float direction = speed > 0.0f ? 1.0f : -1.0f;
+  return direction * (ff_offset_pwm + fabsf(speed) / ff_mm_s_per_pwm);
+}
+
 void WheelSpeedController_c::reset() {
   target_mm_s = 0.0f;
   setpoint_mm_s = 0.0f;

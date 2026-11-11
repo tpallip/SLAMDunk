@@ -82,6 +82,9 @@ class WheelSpeedController_c {
     /** @brief Returns whether the last update() applied the breakaway kick. */
     bool isKicking() const;
 
+    /** @brief The feedforward PWM alone for a speed, without the PI or the kick. */
+    float feedforward(float speed_mm_s) const;
+
     /** @brief Clears the target and integral. The speed estimate is kept. */
     void reset();
 

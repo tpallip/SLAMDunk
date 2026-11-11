@@ -142,6 +142,7 @@ class Controller_c {
     TaskTimer_c telemetry_timer;
     unsigned long recovery_start_ms;
     unsigned long last_line_ms = 0;   // previous follower cycle, for the speed controllers' dt
+    unsigned long follow_start_ms = 0; // when following last (re)started
     bool search_left = true;   // side the line was last seen on, so the search turns that way
     float line_white[5], line_black[5];   // per-sensor levels from config
     float line_norm[5] = {0};             // latest readings, 0 white to 1 black

@@ -93,6 +93,7 @@ void Controller_c::setSignal(uint8_t requested_signal) {
     left_speed.reset();
     right_speed.reset();
     last_line_ms = 0;
+    follow_start_ms = 0;
   }
 }
 
@@ -547,6 +548,7 @@ void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
   if (mode == SEARCHING_FOR_LINE) {
     if (line_detected) {
       mode = FOLLOWING_LINE;
+      follow_start_ms = now;
       left_speed.reset();
       right_speed.reset();
     } else if (now - recovery_start_ms >= (unsigned long)config.values.recovery_timeout_ms) {
@@ -608,6 +610,14 @@ void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
   left_speed.accel_mm_s2 = right_speed.accel_mm_s2 = 0.0f;
   left_speed.setTarget(v - turn_mm_s);
   right_speed.setTarget(v + turn_mm_s);
+  // Just after a search spin the speed estimate still shows the spin (one
+  // wheel backwards), and the PI would drive both wheels hard forward.
+  // Feedforward only until the estimate's window has refreshed twice (one
+  // window still left a lurch in the twin).
+  if (now - follow_start_ms < 2 * (unsigned long)config.values.speed_window_ms) {
+    robot.setMotorPWM(left_speed.feedforward(v - turn_mm_s), right_speed.feedforward(v + turn_mm_s));
+    return;
+  }
   robot.setMotorPWM(left_speed.update(dt_s), right_speed.update(dt_s));
 }
 
