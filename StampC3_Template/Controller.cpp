@@ -568,7 +568,11 @@ void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
     search_left = error > 0.0f;
   }
   float turn = error * config.values.line_gain;
-  float base = config.values.base_pwm;
+  // DN1 or DN5 sees a corner's new line ~15 mm before DN3 loses the old one.
+  // Slow down then, so the motors' ~65 ms dead time carries the robot less
+  // far past the corner.
+  float corner = fmaxf(line_norm[0], line_norm[4]);
+  float base = config.values.base_pwm * (1.0f - config.values.corner_slow * corner);
   robot.setMotorPWM(base - turn, base + turn);
 }
 

@@ -43,7 +43,8 @@
   "recovery_left_pwm": -35,
   "recovery_right_pwm": 35,
   "recovery_timeout_ms": 5000,
-  "search_brake_ms": 70,
+  "search_brake_ms": 0,
+  "corner_slow": 0.5,
 
   "_surface": {
     "dn1_sigma_mm": 2.90,
