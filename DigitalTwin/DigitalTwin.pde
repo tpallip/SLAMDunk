@@ -31,7 +31,18 @@ void setup() {
   //surface.setLocation(0, 0);
   surface.setTitle("CW2026 Digital Twin");
   simulator = new Simulator(this, SURFACE_OFFSET_X_MM, SURFACE_OFFSET_Y_MM);
-  
+
+  // Batch runs with no window updates, then quit:
+  // Processing cli --sketch=<path>/DigitalTwin --run batch <runs> <seconds> [cw]
+  // cw starts facing the other way round the course (clockwise).
+  if (args != null && args.length >= 3 && args[0].equals("batch")) {
+    if (args.length == 4 && args[3].equals("cw")) simulator.homeTheta += PI;
+    // drop the empty sandbox log the constructor started
+    simulator.closeRunLog();
+    new java.io.File(sketchPath(simulator.logDir + "/" + simulator.runLogName)).delete();
+    simulator.runBatch(int(args[1]), int(args[2]));
+    exit();
+  }
 }
 
 /** @brief Advances the application state and renders one frame. */

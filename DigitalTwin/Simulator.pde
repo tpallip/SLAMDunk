@@ -30,7 +30,7 @@ class Simulator {
    */
   final float homeX = 0.0;
   final float homeY = 0.0;
-  final float homeTheta = -PI / 2.0;
+  float homeTheta = -PI / 2.0;
   final int tcpConnectTimeoutMs = 250;
   final float minimumZoom = 0.25;
   final float maximumZoom = 4.0;
@@ -155,13 +155,32 @@ class Simulator {
     int steps = 0;
     while (simulationAccumulatorMs >= simulationUpdateIntervalMs
       && steps < maximumCatchUpSteps) {
-      robot.advanceTime(simulationUpdateIntervalMs);
-      updateLiveClock();
-      controller.update(robot);
-      logTelemetry();
-      robot.updatePhysics(simulationUpdateIntervalMs);
+      step();
       simulationAccumulatorMs -= simulationUpdateIntervalMs;
       steps++;
+    }
+  }
+
+  // one 10 ms model step
+  void step() {
+    robot.advanceTime(simulationUpdateIntervalMs);
+    updateLiveClock();
+    controller.update(robot);
+    logTelemetry();
+    robot.updatePhysics(simulationUpdateIntervalMs);
+  }
+
+  // Runs from the home pose as fast as the computer allows, one log each.
+  // Run i seeds the sensor noise with i, so any run can be repeated exactly.
+  void runBatch(int runs, int seconds) {
+    String stamp = timestamp();
+    for (int i = 0; i < runs; i++) {
+      randomSeed(i);
+      String way = homeTheta > 0 ? "cw" : "acw";
+      startRun("twin_" + stamp + "_" + way + "_seed" + i + ".csv");
+      for (int k = 0; k < seconds * 1000 / simulationUpdateIntervalMs; k++) step();
+      closeRunLog();
+      println("wrote " + runLogName);
     }
   }
 
@@ -293,17 +312,25 @@ class Simulator {
 
   // like pressing the button with the robot on the home spot
   void startRun() {
+    startRun("twin_" + timestamp() + ".csv");
+  }
+
+  void startRun(String logName) {
     robot.resetForRun(homeX, homeY, homeTheta);
     controller.reset();
     controller.odometry.reset(homeX, homeY, homeTheta);
     controller.setSignal(1);
-    openRunLog();
+    openRunLog(logName);
   }
 
-  void openRunLog() {
+  String timestamp() {
+    return nf(year(), 4) + nf(month(), 2) + nf(day(), 2) + "_"
+      + nf(hour(), 2) + nf(minute(), 2) + nf(second(), 2);
+  }
+
+  void openRunLog(String logName) {
     closeRunLog();
-    runLogName = "twin_" + nf(year(), 4) + nf(month(), 2) + nf(day(), 2) + "_"
-      + nf(hour(), 2) + nf(minute(), 2) + nf(second(), 2) + ".csv";
+    runLogName = logName;
     runLog = createWriter(applet.sketchPath(logDir + "/" + runLogName));
     runLog.println("t_ms,x_mm,y_mm,theta_rad,pwm_left,pwm_right,enc_left,enc_right,"
       + "dn1,dn2,dn3,dn4,dn5,signal,true_x_mm,true_y_mm,true_theta_rad");
