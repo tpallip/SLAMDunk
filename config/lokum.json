@@ -39,12 +39,15 @@
 
   "line_level": 0.3,
   "base_pwm": 45,
-  "line_gain": 17.5,
+  "line_gain": 15,
   "recovery_left_pwm": -35,
   "recovery_right_pwm": 35,
   "recovery_timeout_ms": 5000,
   "search_brake_ms": 0,
-  "corner_slow": 0.5,
+  "corner_slow": 0.0,
+  "line_speed_mm_s": 120,
+  "line_gain_mm_s": 55,
+  "line_min_mm_s": 40,
 
   "_surface": {
     "dn1_sigma_mm": 2.90,

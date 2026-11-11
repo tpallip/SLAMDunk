@@ -71,6 +71,10 @@ struct RobotConfigValues_t {
   float recovery_timeout_ms = 5000;
   float search_brake_ms = 0;    // PWM 0 this long before the search spin; 0 spins at once
   float corner_slow = 0.5f;     // base_pwm drops by this share while DN1 or DN5 is on black; 0 off
+  // Follow at wheel speeds through the speed controllers instead of raw PWM.
+  float line_speed_mm_s = 120;  // replaces base_pwm; 0 follows on raw PWM as before
+  float line_gain_mm_s = 55;    // mm/s of turn per unit of DN2 - DN4, normalised
+  float line_min_mm_s = 40;     // inner wheel's lowest target: below ~40 the wheels stick and slip
 
   // safety limits: the defaults are the maximum, config can only lower them
   float manual_max_pwm = 100;

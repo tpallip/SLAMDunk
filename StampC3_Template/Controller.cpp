@@ -90,6 +90,9 @@ void Controller_c::setSignal(uint8_t requested_signal) {
     signal = 1;
     mode = FOLLOWING_LINE;
     recovery_start_ms = 0;
+    left_speed.reset();
+    right_speed.reset();
+    last_line_ms = 0;
   }
 }
 
@@ -211,6 +214,7 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
       right_speed.setTarget(right_target);
     }
     if(manual_vel) {
+      left_speed.accel_mm_s2 = right_speed.accel_mm_s2 = config.values.accel_mm_s2;
       float dt_s = (now - last_manual_ms) / 1000.0f;
       manual_left_pwm = left_speed.update(dt_s);
       manual_right_pwm = right_speed.update(dt_s);
@@ -521,9 +525,17 @@ void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
   bool line_detected = lineDetected();
   float level = config.values.line_level;
 
+  bool speed_mode = config.values.line_speed_mm_s > 0.0f;
+  float dt_s = last_line_ms ? (now - last_line_ms) / 1000.0f : 0.0f;
+  last_line_ms = now;
+
   if (!line_detected && mode == FOLLOWING_LINE) {
     mode = SEARCHING_FOR_LINE;
     recovery_start_ms = now;
+    // The spin runs on raw PWM; an integral built up while it spins would
+    // kick the wheels when following starts again.
+    left_speed.reset();
+    right_speed.reset();
     // An outer sensor may still see where the line went.
     if (line_norm[0] >= level) {
       search_left = true;
@@ -535,6 +547,8 @@ void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
   if (mode == SEARCHING_FOR_LINE) {
     if (line_detected) {
       mode = FOLLOWING_LINE;
+      left_speed.reset();
+      right_speed.reset();
     } else if (now - recovery_start_ms >= (unsigned long)config.values.recovery_timeout_ms) {
       mode = STOPPED;
     }
@@ -572,8 +586,29 @@ void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
   // Slow down then, so the motors' ~65 ms dead time carries the robot less
   // far past the corner.
   float corner = fmaxf(line_norm[0], line_norm[4]);
-  float base = config.values.base_pwm * (1.0f - config.values.corner_slow * corner);
-  robot.setMotorPWM(base - turn, base + turn);
+  float slow = 1.0f - config.values.corner_slow * corner;
+
+  if (!speed_mode) {
+    float base = config.values.base_pwm * slow;
+    robot.setMotorPWM(base - turn, base + turn);
+    return;
+  }
+
+  // Wheel speeds: each wheel's speed controller finds the PWM, so the faster
+  // right wheel and battery drift no longer pull the robot off the line.
+  if (now - last_enc_ok_ms > ENCODER_LOSS_MS) {
+    robot.setMotorPWM(0, 0);   // the controllers would read the wheels as stuck
+    return;
+  }
+  float v = config.values.line_speed_mm_s * slow;
+  float turn_mm_s = error * config.values.line_gain_mm_s;
+  float max_turn = fmaxf(v - config.values.line_min_mm_s, 0.0f);
+  turn_mm_s = constrain(turn_mm_s, -max_turn, max_turn);
+  // No setpoint ramp: it would delay every steering change.
+  left_speed.accel_mm_s2 = right_speed.accel_mm_s2 = 0.0f;
+  left_speed.setTarget(v - turn_mm_s);
+  right_speed.setTarget(v + turn_mm_s);
+  robot.setMotorPWM(left_speed.update(dt_s), right_speed.update(dt_s));
 }
 
 void Controller_c::publishTelemetry(Robot_c &robot, RobotWifiAP_c &server, unsigned long timestamp_ms) {
