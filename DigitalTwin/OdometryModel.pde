@@ -1,58 +1,52 @@
-/** @brief Cached left and right encoder counts. */
-class RobotEncoders_c {
-  float left = 0;
-  float right = 0;
-}
-
-/** @brief Robot pose in world coordinates: x/y in mm and heading in radians. */
 class RobotPose_c {
   float x = 0;
   float y = 0;
   float theta = 0;
+
+  void set(float xIn, float yIn, float thetaIn) {
+    x = xIn;
+    y = yIn;
+    theta = thetaIn;
+  }
 }
 
 /**
- * @brief Ideal differential-drive pose and encoder model.
- * @details The model integrates wheel travel over each fixed simulation step.
- * It makes no claim that its geometry or encoder resolution is calibrated to
- * a physical robot.
+ * @brief Pose from encoder counts, same maths as the StampC3's OdometryModel.
+ * @note It only sees the counts, so it can drift from the true pose.
  */
 class OdometryModel_c {
-  final float mmPerEncoderCount;
-  RobotEncoders_c encoders = new RobotEncoders_c();
+  final float COUNTS_PER_REV = 358.3;
+  float leftRadiusMm, rightRadiusMm, separationMm;
   RobotPose_c pose = new RobotPose_c();
+  boolean started = false;
+  int lastLeft = 0, lastRight = 0;
 
-  /**
-   * @param wheelRadiusMm Wheel radius used to convert revolutions to mm.
-   * @param encoderCountsPerRevolution Encoder resolution used for count output.
-   */
-  OdometryModel_c(float wheelRadiusMm, float encoderCountsPerRevolution) {
-    mmPerEncoderCount = TWO_PI * wheelRadiusMm / encoderCountsPerRevolution;
+  OdometryModel_c(float leftRadiusMmIn, float rightRadiusMmIn, float separationMmIn) {
+    leftRadiusMm = leftRadiusMmIn;
+    rightRadiusMm = rightRadiusMmIn;
+    separationMm = separationMmIn;
   }
 
-  /** @brief Sets the complete pose and encoder state for a new run. */
-  void reset(float x, float y, float theta, float leftEncoder,
-    float rightEncoder) {
-    pose.x = x;
-    pose.y = y;
-    pose.theta = theta;
-    encoders.left = leftEncoder;
-    encoders.right = rightEncoder;
+  void reset(float x, float y, float theta) {
+    pose.set(x, y, theta);
+    started = false;
   }
 
-  /**
-   * @brief Integrates one differential-drive motion increment.
-   * @param leftDistance Left wheel travel in mm over the step.
-   * @param rightDistance Right wheel travel in mm over the step.
-   * @param wheelSeparationMm Distance between wheels in mm.
-   */
-  void update(float leftDistance, float rightDistance, float wheelSeparationMm) {
-    float distance = (leftDistance + rightDistance) / 2.0;
-    float deltaTheta = (rightDistance - leftDistance) / wheelSeparationMm;
+  void update(int leftCount, int rightCount) {
+    if (!started) {
+      lastLeft = leftCount;
+      lastRight = rightCount;
+      started = true;
+      return;
+    }
+    float left = (leftCount - lastLeft) * TWO_PI * leftRadiusMm / COUNTS_PER_REV;
+    float right = (rightCount - lastRight) * TWO_PI * rightRadiusMm / COUNTS_PER_REV;
+    lastLeft = leftCount;
+    lastRight = rightCount;
+
+    float distance = (left + right) / 2.0;
     pose.x += distance * cos(pose.theta);
     pose.y += distance * sin(pose.theta);
-    pose.theta += deltaTheta;
-    encoders.left += leftDistance / mmPerEncoderCount;
-    encoders.right += rightDistance / mmPerEncoderCount;
+    pose.theta += (right - left) / separationMm;
   }
 }

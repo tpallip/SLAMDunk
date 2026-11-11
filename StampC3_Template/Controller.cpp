@@ -59,18 +59,6 @@ void Controller_c::applyConfig() {
   twist.stop_speed_mm_s = c.move_min_speed_mm_s;
   twist.left_stop_lead_s = c.twist_left_lead_s;
   twist.right_stop_lead_s = c.twist_right_lead_s;
-
-  const float whites[LineSensor_c::N] = {c.dn1_white, c.dn2_white, c.dn3_white, c.dn4_white, c.dn5_white};
-  const float blacks[LineSensor_c::N] = {c.dn1_black, c.dn2_black, c.dn3_black, c.dn4_black, c.dn5_black};
-  const float sigmas[LineSensor_c::N] = {c.dn1_sigma_mm, c.dn2_sigma_mm, c.dn3_sigma_mm, c.dn4_sigma_mm, c.dn5_sigma_mm};
-  for (int i = 0; i < LineSensor_c::N; i++) {
-    line.white[i] = whites[i];
-    line.black[i] = blacks[i];
-    line.sigma_mm[i] = sigmas[i];
-  }
-  line.line_width_mm = c.line_width_mm;
-  line.detect_level = c.line_detect_level;
-  line.configure();
 }
 
 void Controller_c::reset() {
@@ -78,8 +66,6 @@ void Controller_c::reset() {
   mode = WAITING;
   usr_mode = AUTO;
   recovery_start_ms = 0;
-  left_speed.accel_mm_s2 = config.values.accel_mm_s2;   // the line follower uses its own
-  right_speed.accel_mm_s2 = config.values.accel_mm_s2;
 }
 
 uint8_t Controller_c::getSignal() const {
@@ -96,13 +82,6 @@ void Controller_c::setSignal(uint8_t requested_signal) {
     signal = 1;
     mode = FOLLOWING_LINE;
     recovery_start_ms = 0;
-    left_speed.reset();
-    right_speed.reset();
-    left_speed.accel_mm_s2 = config.values.line_accel_mm_s2;
-    right_speed.accel_mm_s2 = config.values.line_accel_mm_s2;
-    last_line_ms = 0;   // no previous cycle yet
-    last_offset_mm = line.offset_mm;
-    line_spinning = false;
   }
 }
 
@@ -139,7 +118,6 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
 
   // Ask the robot for latest information on surface reflectance sensors.
   robot.getSurfaceSensors();
-  line.update(robot.surface.reading);
 
   // Ask the robot for the latest encoder information, and then use this
   // to update the odometry on board the StampC3 (see OdometryModel.h).
@@ -528,10 +506,6 @@ void Controller_c::handleConfigCommand(RobotWifiAP_c &server, const char *cmd, C
 }
 
 void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
-  if (config.values.line_mode >= 0.5f) {
-    runOffsetFollower(robot, now);
-    return;
-  }
   bool line_detected = lineDetected(robot);
 
   if (!line_detected && mode == FOLLOWING_LINE) {
@@ -561,80 +535,6 @@ void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
   float turn = error * config.values.line_follow_gain;
   float base = config.values.base_pwm;
   robot.setMotorPWM(base - turn, base + turn);
-}
-
-void Controller_c::runOffsetFollower(Robot_c &robot, unsigned long now) {
-  const RobotConfigValues_t &c = config.values;
-  float dt_s = last_line_ms == 0 ? 0.0f : (now - last_line_ms) / 1000.0f;
-  last_line_ms = now;
-
-  if (line.detected && mode == SEARCHING_FOR_LINE) {
-    mode = FOLLOWING_LINE;
-    last_offset_mm = line.offset_mm;
-  } else if (!line.detected && mode == FOLLOWING_LINE) {
-    mode = SEARCHING_FOR_LINE;
-    recovery_start_ms = now;
-  } else if (mode == SEARCHING_FOR_LINE && now - recovery_start_ms >= (unsigned long)c.recovery_timeout_ms) {
-    mode = STOPPED;
-  }
-  // The speed controllers would read the wheels as stuck and drive them harder.
-  if (mode == STOPPED || now - last_enc_ok_ms > ENCODER_LOSS_MS) {
-    mode = STOPPED;
-    left_speed.reset();
-    right_speed.reset();
-    robot.setMotorPWM(0, 0);
-    return;
-  }
-
-  float half_b = c.wheel_separation_mm / 2;
-  float left_target, right_target;
-  // A short loss (mostly at corners, under 0.25 s) is ridden through on the
-  // last offset; only a longer one spins.
-  bool spin = mode == SEARCHING_FOR_LINE
-              && now - recovery_start_ms >= (unsigned long)c.line_lost_hold_ms;
-  if (spin != line_spinning) {
-    // Integral built up for following would overshoot the spin, and the other way round.
-    left_speed.clearIntegral();
-    right_speed.clearIntegral();
-    line_spinning = spin;
-  }
-  if (spin) {
-    // Spin towards the side the line was last seen on.
-    float wheel = radians(c.line_search_deg_s) * half_b * (last_offset_mm >= 0.0f ? 1.0f : -1.0f);
-    left_target = -wheel;
-    right_target = wheel;
-  } else {
-    // Pure pursuit on the point the sensors see: the line's middle at (L, e)
-    // ahead of the wheels is reached on an arc of curvature 2e / (L^2 + e^2).
-    // The outer wheel is held at line_speed_mm_s, so the robot slows on curves.
-    // While the line is lost (before spinning), steer on the last offset.
-    bool seen = mode == FOLLOWING_LINE;
-    float e = seen ? line.offset_mm : last_offset_mm;
-    float lookahead = c.line_lookahead_mm;
-    float curvature = c.line_kp * 2.0f * e / (lookahead * lookahead + e * e);   // 1/mm, + anticlockwise
-    // No sharper than turning about the inner wheel: the inner wheel stops
-    // instead of reversing, so its speed controller doesn't flip direction.
-    curvature = constrain(curvature, -1.0f / half_b, 1.0f / half_b);
-    float v = c.line_speed_mm_s / (1.0f + fabsf(curvature) * half_b);
-    float omega = v * curvature;                                               // rad/s
-    if (seen && dt_s > 0.0f) {
-      omega += radians(c.line_kd) * (e - last_offset_mm) / dt_s;
-    }
-    last_offset_mm = e;
-    left_target = fmaxf(0.0f, v - omega * half_b);
-    right_target = fmaxf(0.0f, v + omega * half_b);
-    // Near 0 the wheel can only be held at run_min_pwm or stopped: stop it.
-    if (left_target < c.line_min_wheel_mm_s) left_target = 0.0f;
-    if (right_target < c.line_min_wheel_mm_s) right_target = 0.0f;
-  }
-  left_speed.setTarget(left_target);
-  right_speed.setTarget(right_target);
-  // On the first cycle the setpoint ramp hasn't moved off 0 yet, so the
-  // feedforward would push backwards for one cycle; wait for the next.
-  if (dt_s <= 0.0f) {
-    return;
-  }
-  robot.setMotorPWM(left_speed.update(dt_s), right_speed.update(dt_s));
 }
 
 void Controller_c::publishTelemetry(Robot_c &robot, RobotWifiAP_c &server, unsigned long timestamp_ms) {
@@ -890,12 +790,6 @@ void Controller_c::handleCommand(Robot_c &robot, RobotWifiAP_c &server, const ch
     // Answered in the same cycle, so the round trip includes the wait for the
     // next 10 ms update (as every other command does) but nothing else.
     reply(server, source, "#P %lu %lu\n", ping_id, now);
-  }
-  else if(strcmp(cmd, "line") == 0) {
-    reply(server, source, "#L offset_mm=%.2f residual=%.3f detected=%d norm=%.2f %.2f %.2f %.2f %.2f us=%lu max_us=%lu\n",
-          line.offset_mm, line.residual, line.detected ? 1 : 0,
-          line.norm[0], line.norm[1], line.norm[2], line.norm[3], line.norm[4],
-          line.update_us, line.max_update_us);
   }
   else {
     reply(server, source, "#E unknown command: %s\n", cmd);

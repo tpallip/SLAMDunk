@@ -1,7 +1,7 @@
 """Line offset from logged surface readings, the same way the robot works it out.
 
-Mirror of StampC3_Template/LineSensor.cpp, for checking it on logged runs
-without reflashing: each sensor normalised to 0 on white and 1 on black with
+Offline only (the robot's offset follower and its LineSensor were removed;
+the robot runs the template follower). Each sensor normalised to 0 on white and 1 on black with
 its own levels, then the line's sideways offset (mm, + to the robot's left)
 as the offset whose predicted readings match best. For a line of width w
 seen through each sensor's Gaussian footprint sigma, a sensor y mm to the
@@ -15,9 +15,10 @@ DN5 right). The search runs every 2 mm over +-50 mm, then every 0.5 mm within
 only DN1 or DN5 sees the line. The line counts as seen when any sensor reads
 at least line_detect_level.
 
-Levels, footprints, line width and detect level come from the robot's config
-file (dn<k>_white, dn<k>_black, dn<k>_sigma_mm, line_width_mm,
-line_detect_level), the same keys the logger sends to the robot.
+Levels, footprints, line width and detect level come from the "_surface"
+section of the robot's config file (dn<k>_white, dn<k>_black,
+dn<k>_sigma_mm, line_width_mm, line_detect_level). The logger doesn't send
+that section to the robot.
 
     python tools/line_position.py logs/run_x.csv
     python tools/line_position.py logs/run_x.csv --config config/lokum.json --plot
@@ -43,7 +44,7 @@ OUT_DIR = Path(__file__).resolve().parent.parent / "bench" / "line_position"
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Line offset from logged surface readings (LineSensor_c mirror).")
+    parser = argparse.ArgumentParser(description="Line offset from logged surface readings.")
     parser.add_argument("file", help="logger CSV")
     parser.add_argument("--config", type=Path, default=CONFIG, help=f"robot config (default: {CONFIG.name})")
     parser.add_argument("--out", type=Path, help=f"folder for the results (default: {OUT_DIR}/<file name>)")
@@ -59,6 +60,7 @@ def load(path):
 
 def settings(path):
     c = json.loads(path.read_text())
+    c = c.get("_surface", c)
     get = lambda key: float(c[key])
     return {"white": np.array([get(f"{s}_white") for s in SENSORS]),
             "black": np.array([get(f"{s}_black") for s in SENSORS]),

@@ -158,7 +158,14 @@ affects tuning and odometry. Note the charge state in any benchmark.**
 
 1. Install Processing 4 from <https://processing.org/download>.
 2. Open `DigitalTwin/DigitalTwin.pde`.
-3. Run it. It works standalone as a simulator. For live comparison (`M`) it
+3. Run it. In sandbox mode a run starts at once from the home pose (left
+   line, halfway down, facing down the page); `R` restarts it. The twin runs
+   the same template follower as the robot (`runLineFollower`) and reads its
+   settings, wheel sizes, motor speed lines and sensor levels from
+   `config/lokum.json`.
+   Each run is logged to `logs/twin_<date>_<time>.csv` in the robot's format
+   plus the true pose, so both can be compared with
+   `python3 tools/compare_runs.py logs/run_x.csv logs/twin_y.csv`. For live comparison (`M`) it
    reads the robot's telemetry from the logger's hub at `127.0.0.1:9200`, so
    start `tools/logger.py` first.
 

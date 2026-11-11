@@ -1,39 +1,65 @@
 /**
- * @brief Ideal paired motor-response model for the simulated robot.
- * @note This deliberately linear mapping is a starting assumption, not a
- * calibrated model of the physical motors.
+ * @brief Both motors. Each wheel uses the speed line measured for the robot's
+ * feedforward (ff_offset_pwm, ff_mm_s_per_pwm in lokum.json) and stops below
+ * run_min_pwm.
  */
 class MotorsModel_c {
-  // Deliberately simple starting assumption for student-led refinement.
-  final float maximumWheelSpeedMmPerMs = 0.25;
-  MotorModel_c left = new MotorModel_c();
-  MotorModel_c right = new MotorModel_c();
+  MotorModel_c left;
+  MotorModel_c right;
 
-  /** @brief Stores requested left and right PWM values after limiting them. */
+  MotorsModel_c(JSONObject cfg) {
+    left = new MotorModel_c(cfg.getFloat("left_ff_offset_pwm", 0), cfg.getFloat("left_ff_mm_s_per_pwm", 1.25),
+      cfg.getFloat("left_run_min_pwm", 0));
+    right = new MotorModel_c(cfg.getFloat("right_ff_offset_pwm", 0), cfg.getFloat("right_ff_mm_s_per_pwm", 1.25),
+      cfg.getFloat("right_run_min_pwm", 0));
+  }
+
   void setPWM(float leftPwm, float rightPwm) {
     left.setPWM(leftPwm);
     right.setPWM(rightPwm);
   }
 
-  /** @brief Updates both ideal wheel-speed estimates for the current PWM. */
-  void update() {
-    left.update(maximumWheelSpeedMmPerMs);
-    right.update(maximumWheelSpeedMmPerMs);
+  void update(int dtMs) {
+    left.update(dtMs);
+    right.update(dtMs);
+  }
+
+  void reset() {
+    left.reset();
+    right.reset();
   }
 }
 
-/** @brief Ideal response model for one motor. */
 class MotorModel_c {
-  float pwm = 0;
-  float speedMmPerMs = 0;
+  // Wheels take roughly this long to get most of the way to a new speed
+  // (bench/1.7_step_response: 40-110 ms depending on the case).
+  final float LAG_MS = 70;
 
-  /** @brief Limits and stores a requested PWM value in [-200, +200]. */
-  void setPWM(float value) { pwm = constrain(value, -200, 200); }
+  float offsetPwm, mmPerSecPerPwm, minPwm;
+  int pwm = 0;
+  float speedMmS = 0;
 
-  /** @brief Maps the requested PWM linearly to wheel speed.
-   * @param maximumSpeed Maximum wheel speed in mm/ms.
-   */
-  void update(float maximumSpeed) {
-    speedMmPerMs = map(pwm, -200, 200, -maximumSpeed, maximumSpeed);
+  MotorModel_c(float offsetPwmIn, float mmPerSecPerPwmIn, float minPwmIn) {
+    offsetPwm = offsetPwmIn;
+    mmPerSecPerPwm = mmPerSecPerPwmIn;
+    minPwm = minPwmIn;
+  }
+
+  // the robot truncates PWM to an int
+  void setPWM(float value) { pwm = (int) constrain(value, -255, 255); }
+
+  void reset() {
+    pwm = 0;
+    speedMmS = 0;
+  }
+
+  float steadySpeed() {
+    if (abs(pwm) < minPwm) return 0;
+    float v = max(0, (abs(pwm) - offsetPwm) * mmPerSecPerPwm);
+    return pwm > 0 ? v : -v;
+  }
+
+  void update(int dtMs) {
+    speedMmS += (steadySpeed() - speedMmS) * (1 - exp(-dtMs / LAG_MS));
   }
 }

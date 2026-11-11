@@ -1,109 +1,89 @@
 /**
- * @brief Top-level model of the robot, excluding the environment.
- * @details Coordinates independent motor, surface-sensor, and odometry
- * models. Its public methods deliberately mirror the subset of Robot_c used
- * by Controller_c, while the model components remain visible for revision.
+ * @brief The simulated robot body, motors, encoders and surface sensors.
+ * @details truth is where the robot really is. The controller never sees it;
+ * it gets encoder counts and sensor readings, like on the real robot.
  */
 class Robot_c {
-  /** @brief Radius used only to draw the robot body, in mm. */
   final float bodyRadiusMm = 50.0;
-  final float wheelRadiusMm;
-  final float wheelSeparationMm;
-  final float encoderCountsPerRevolution = 358.3;
+  final float COUNTS_PER_REV = 358.3;
+  final float[] SENSOR_ANGLES = {45, 14, 0, -14, -45};
 
-  /** @brief Simulated clock, advanced explicitly in milliseconds. */
+  float leftRadiusMm, rightRadiusMm, separationMm;
   long simulationMillis = 0;
   PImage surfaceImage;
   final float surfaceOffsetX;
   final float surfaceOffsetY;
   RobotSurface_c surface = new RobotSurface_c();
-  MotorsModel_c motors = new MotorsModel_c();
-  OdometryModel_c odometry;
+  MotorsModel_c motors;
   SurfaceSensorModel_c[] sensors = new SurfaceSensorModel_c[5];
 
-  /**
-   * @param wheelRadiusMmIn Wheel radius used by the odometry model, in mm.
-   * @param wheelSeparationMmIn Distance between wheels, in mm.
-   * @param surfaceIn Environment image sampled by the five surface sensors.
-   * @param surfaceOffsetXIn Surface-image x offset in world millimetres.
-   * @param surfaceOffsetYIn Surface-image y offset in world millimetres.
-   */
-  Robot_c(float wheelRadiusMmIn, float wheelSeparationMmIn,
-    PImage surfaceIn, float surfaceOffsetXIn, float surfaceOffsetYIn) {
-    wheelRadiusMm = wheelRadiusMmIn;
-    wheelSeparationMm = wheelSeparationMmIn;
+  RobotPose_c truth = new RobotPose_c();
+  float leftCounts = 0, rightCounts = 0;  // the encoders report the whole part
+
+  Robot_c(JSONObject cfg, PImage surfaceIn, float surfaceOffsetXIn, float surfaceOffsetYIn) {
+    leftRadiusMm = cfg.getFloat("left_wheel_radius_mm", 16.0);
+    rightRadiusMm = cfg.getFloat("right_wheel_radius_mm", 16.0);
+    separationMm = cfg.getFloat("wheel_separation_mm", 90.0);
     surfaceImage = surfaceIn;
     surfaceOffsetX = surfaceOffsetXIn;
     surfaceOffsetY = surfaceOffsetYIn;
-    odometry = new OdometryModel_c(wheelRadiusMm, encoderCountsPerRevolution);
-    sensors[0] = new SurfaceSensorModel_c("DN1", 45, 45);
-    sensors[1] = new SurfaceSensorModel_c("DN2", 45, 14);
-    sensors[2] = new SurfaceSensorModel_c("DN3", 45, 0);
-    sensors[3] = new SurfaceSensorModel_c("DN4", 45, -14);
-    sensors[4] = new SurfaceSensorModel_c("DN5", 45, -45);
-    odometry.reset(0.0,0.0, -PI/2.0, 0.0, 0.0);
+    motors = new MotorsModel_c(cfg);
+    // measured sensor levels; under "_surface" so the logger doesn't send them to the robot
+    JSONObject levels = cfg.hasKey("_surface") ? cfg.getJSONObject("_surface") : new JSONObject();
+    for (int i = 0; i < 5; i++) {
+      String dn = "dn" + (i + 1);
+      sensors[i] = new SurfaceSensorModel_c(dn.toUpperCase(), 45, SENSOR_ANGLES[i],
+        levels.getFloat(dn + "_white", 400), levels.getFloat(dn + "_black", 2000));
+    }
+    resetForRun(0, 0, -PI / 2);
   }
 
-  /** @return Current simulated time in milliseconds. */
   long getMillis() { return simulationMillis; }
-  /** @brief Advances the simulated clock.
-   * @param dtMs Positive elapsed model time in milliseconds.
-   */
   void advanceTime(int dtMs) { simulationMillis += dtMs; }
 
-  /** @brief Samples all five ideal surface sensors into surface.reading. */
   void getSurfaceSensors() {
-    RobotPose_c pose = odometry.pose;
     for (int i = 0; i < sensors.length; i++) {
-      surface.reading[i] = sensors[i].sample(surfaceImage, surfaceOffsetX,
-        surfaceOffsetY, pose.x, pose.y, pose.theta);
+      surface.reading[i] = sensors[i].sample(surfaceImage, surfaceOffsetX, surfaceOffsetY,
+        truth.x, truth.y, truth.theta);
     }
   }
 
-  /** @brief Compatibility method; encoder values update during physics steps. */
-  void getEncoders() { }
-  /** @brief Compatibility method; pose values update during physics steps. */
-  void getPose() { }
+  int getLeftEncoderCount() { return floor(leftCounts); }
+  int getRightEncoderCount() { return floor(rightCounts); }
 
-  /** @brief Stores requested left and right motor PWM values.
-   * @param leftPwm Requested left PWM, nominally -200 to +200.
-   * @param rightPwm Requested right PWM, nominally -200 to +200.
-   */
   void setMotorPWM(float leftPwm, float rightPwm) {
     motors.setPWM(leftPwm, rightPwm);
   }
 
-  /** @brief Resets pose and encoder state for a controlled run.
-   * @param x Initial x position in mm.
-   * @param y Initial y position in mm.
-   * @param theta Initial heading in radians.
-   * @param leftEncoder Initial left encoder count.
-   * @param rightEncoder Initial right encoder count.
-   */
-  void resetForRun(float x, float y, float theta, float leftEncoder,
-    float rightEncoder) {
-    odometry.reset(x, y, theta, leftEncoder, rightEncoder);
-    setMotorPWM(0, 0);
+  // Put the robot down at a pose, stopped. The encoders keep their counts.
+  void resetForRun(float x, float y, float theta) {
+    truth.set(x, y, theta);
+    motors.reset();
   }
 
-  /** @brief Advances motor response and differential-drive odometry.
-   * @param dtMs Fixed simulation step in milliseconds.
-   */
   void updatePhysics(int dtMs) {
-    motors.update();
-    float leftDistance = motors.left.speedMmPerMs * dtMs;
-    float rightDistance = motors.right.speedMmPerMs * dtMs;
-    odometry.update(leftDistance, rightDistance, wheelSeparationMm);
+    motors.update(dtMs);
+    float left = motors.left.speedMmS * dtMs / 1000.0;
+    float right = motors.right.speedMmS * dtMs / 1000.0;
+    leftCounts += left / (TWO_PI * leftRadiusMm) * COUNTS_PER_REV;
+    rightCounts += right / (TWO_PI * rightRadiusMm) * COUNTS_PER_REV;
+
+    float distance = (left + right) / 2.0;
+    truth.x += distance * cos(truth.theta);
+    truth.y += distance * sin(truth.theta);
+    truth.theta += (right - left) / separationMm;
   }
 
-  /** @return The current five-channel ideal surface-sensor readings. */
-  float[] sensorReadings() { return surface.reading; }
+  float[] sensorReadings() {
+    float[] r = new float[5];
+    for (int i = 0; i < 5; i++) r[i] = surface.reading[i];
+    return r;
+  }
 
   void draw() {
-    RobotPose_c pose = odometry.pose;
     pushMatrix();
-    translate(pose.x, pose.y);
-    rotate(pose.theta);
+    translate(truth.x, truth.y);
+    rotate(truth.theta);
     fill(190, 205, 220);
     stroke(40);
     strokeWeight(2);

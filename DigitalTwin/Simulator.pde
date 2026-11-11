@@ -35,6 +35,8 @@ class Simulator {
   final float minimumZoom = 0.25;
   final float maximumZoom = 4.0;
   final int SANDBOX = 0, LIVE_COMPARISON = 1;
+  final String robotId = "lokum";
+  final String logDir = "../logs";
 
   /** @brief Surface-image centre in world coordinates, in mm. */
   final float surfaceOffsetX;
@@ -77,6 +79,9 @@ class Simulator {
   int simulationAccumulatorMs = 0;
   int lastTcpAttemptMs = -tcpRetryPeriodMs;
 
+  PrintWriter runLog = null;
+  String runLogName = "";
+
   Client telemetryClient;
   TCPTelemetry_c tcpTelemetry = new TCPTelemetry_c();
   String tcpStatus = "TCP: not connected";
@@ -98,10 +103,11 @@ class Simulator {
     ellipseMode(RADIUS);
     strokeJoin(ROUND);
     surfaceImage = loadSurfaceImage();
-    robot = new Robot_c(16.0, 90.00, surfaceImage,
-      surfaceOffsetX, surfaceOffsetY);
-    controller = new Controller_c();
-    controller.setSignal(1); // Sandbox starts immediately.
+    // same settings file the logger sends to the robot
+    JSONObject cfg = applet.loadJSONObject(applet.sketchPath("../config/" + robotId + ".json"));
+    robot = new Robot_c(cfg, surfaceImage, surfaceOffsetX, surfaceOffsetY);
+    controller = new Controller_c(cfg);
+    startRun(); // Sandbox starts immediately.
     lastSimulationUpdateMs = millis();
 
     motorGraph = new TimeSeriesGraph("Motor PWM", graphWindowMs, true);
@@ -126,8 +132,8 @@ class Simulator {
     updateRobotModel();
 
     if (trackRobot) {
-      viewCentreX = robot.odometry.pose.x;
-      viewCentreY = robot.odometry.pose.y;
+      viewCentreX = robot.truth.x;
+      viewCentreY = robot.truth.y;
     }
     recordTelemetry();
   }
@@ -152,6 +158,7 @@ class Simulator {
       robot.advanceTime(simulationUpdateIntervalMs);
       updateLiveClock();
       controller.update(robot);
+      logTelemetry();
       robot.updatePhysics(simulationUpdateIntervalMs);
       simulationAccumulatorMs -= simulationUpdateIntervalMs;
       steps++;
@@ -261,6 +268,7 @@ class Simulator {
     if (pressedKey == 'g' || pressedKey == 'G') showTelemetry = !showTelemetry;
     if (pressedKey == 't' || pressedKey == 'T') trackRobot = !trackRobot;
     if ((pressedKey == 'm' || pressedKey == 'M') && !liveRunning) toggleMode();
+    if ((pressedKey == 'r' || pressedKey == 'R') && simulatorMode == SANDBOX) startRun();
     if (pressedKey == '+' || pressedKey == '=') zoom = min(maximumZoom, zoom * 1.2);
     if (pressedKey == '-') zoom = max(minimumZoom, zoom / 1.2);
 
@@ -279,7 +287,40 @@ class Simulator {
   void toggleMode() {
     simulatorMode = simulatorMode == SANDBOX ? LIVE_COMPARISON : SANDBOX;
     resetLiveSession();
-    if (simulatorMode == SANDBOX) controller.setSignal(1);
+    closeRunLog();
+    if (simulatorMode == SANDBOX) startRun();
+  }
+
+  // like pressing the button with the robot on the home spot
+  void startRun() {
+    robot.resetForRun(homeX, homeY, homeTheta);
+    controller.reset();
+    controller.odometry.reset(homeX, homeY, homeTheta);
+    controller.setSignal(1);
+    openRunLog();
+  }
+
+  void openRunLog() {
+    closeRunLog();
+    runLogName = "twin_" + nf(year(), 4) + nf(month(), 2) + nf(day(), 2) + "_"
+      + nf(hour(), 2) + nf(minute(), 2) + nf(second(), 2) + ".csv";
+    runLog = createWriter(applet.sketchPath(logDir + "/" + runLogName));
+    runLog.println("t_ms,x_mm,y_mm,theta_rad,pwm_left,pwm_right,enc_left,enc_right,"
+      + "dn1,dn2,dn3,dn4,dn5,signal,true_x_mm,true_y_mm,true_theta_rad");
+  }
+
+  void closeRunLog() {
+    if (runLog == null) return;
+    runLog.flush();
+    runLog.close();
+    runLog = null;
+  }
+
+  void logTelemetry() {
+    if (runLog == null || controller.telemetryLine == null) return;
+    runLog.println(controller.telemetryLine + ","
+      + String.format(java.util.Locale.ROOT, "%.2f,%.2f,%.5f", robot.truth.x, robot.truth.y, robot.truth.theta));
+    runLog.flush();
   }
 
   void panBy(float deltaX, float deltaY) {
@@ -300,11 +341,13 @@ class Simulator {
     rect(margin - 6, margin - 6, contentWidth + 12, lineHeight * 4 + 12, 5);
     fill(30);
     textSize(max(12, 13 * uiScale()));
-    text("Robot pose: " + nf(robot.odometry.pose.x, 0, 1) + ", "
-      + nf(robot.odometry.pose.y, 0, 1) + ", " + nf(robot.odometry.pose.theta, 0, 2),
+    text("True pose: " + nf(robot.truth.x, 0, 1) + ", " + nf(robot.truth.y, 0, 1) + ", "
+      + nf(robot.truth.theta, 0, 2) + "   Odometry: " + nf(controller.odometry.pose.x, 0, 1) + ", "
+      + nf(controller.odometry.pose.y, 0, 1) + ", " + nf(controller.odometry.pose.theta, 0, 2)
+      + "   Log: " + (runLog == null ? "off" : runLogName),
       margin, margin + lineHeight, contentWidth, lineHeight);
     text("+/-: zoom   Arrows: pan   T: tracking "
-      + (trackRobot ? "on" : "off") + "   G: telemetry   M: mode",
+      + (trackRobot ? "on" : "off") + "   G: telemetry   M: mode   R: restart run",
       margin, margin + lineHeight * 2, contentWidth, lineHeight);
     text(tcpStatus, margin, margin + lineHeight * 3, contentWidth, lineHeight);
     text(liveStatus(), margin, margin + lineHeight * 4, contentWidth, lineHeight);
@@ -329,15 +372,15 @@ class Simulator {
     motorGraph.addSample(now, new float[] {robot.motors.left.pwm, robot.motors.right.pwm,
         tcpTelemetry.pwmLeft, tcpTelemetry.pwmRight});
       sensorGraph.addSample(now, combine(simulatedSensors, tcpTelemetry.sensorReadings));
-      encoderGraph.addSample(now, new float[] {robot.odometry.encoders.left,
-        robot.odometry.encoders.right, tcpTelemetry.encoderLeft, tcpTelemetry.encoderRight});
+      encoderGraph.addSample(now, new float[] {robot.getLeftEncoderCount(),
+        robot.getRightEncoderCount(), tcpTelemetry.encoderLeft, tcpTelemetry.encoderRight});
     } else {
       motorGraph.addSample(now, new float[] {
         robot.motors.left.pwm, robot.motors.right.pwm
       });
       sensorGraph.addSample(now, simulatedSensors);
       encoderGraph.addSample(now, new float[] {
-        robot.odometry.encoders.left, robot.odometry.encoders.right
+        robot.getLeftEncoderCount(), robot.getRightEncoderCount()
       });
     }
   }
@@ -502,10 +545,7 @@ class Simulator {
       liveArmed = true;
     }
     if (liveArmed && !liveRunning && previousTcpSignal == 0 && sample.signal == 1) {
-      controller.reset();
-      controller.setSignal(1);
-      robot.resetForRun(homeX, homeY, homeTheta,
-        armedPose.encoderLeft, armedPose.encoderRight);
+      startRun();
       liveStartTcpMs = sample.timestampMs;
       liveStartSimulationMs = robot.getMillis();
       ghost = toMap(armedPose);

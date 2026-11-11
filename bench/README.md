@@ -120,8 +120,14 @@ medians unless it says otherwise.
 - **Method:** spun the robot over the course line and fitted how sharply
   each reading changes at the tape's edge.
 - **Answer:** each sensor sees a blurred spot with a spread (sigma) of
-  2.3-3.6 mm; going from white to black takes 6-9 mm of travel. The tape is
-  about 16.5 mm wide.
+  2.3-3.6 mm; going from white to black takes 6-9 mm of travel. The fit
+  puts the tape at about 16.5 mm wide.
+- **Open question:** a ruler says the tape is about 18.5 mm. The fit comes
+  out 2 mm narrow, so the model is missing something: maybe the spot isn't
+  really Gaussian, or the readings don't scale in a straight line between
+  white and black. The robot still uses 16.5 (`line_width_mm`) because
+  that's what fits its readings. The twin's map is 19 mm; moving it to 18.5
+  made no clear difference in one run, so it's left until last.
 
 ## Line following ([`line_position`](line_position/report.md))
 

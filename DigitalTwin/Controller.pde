@@ -1,48 +1,46 @@
 /**
- * @brief Nominal line-following controller shared conceptually with StampC3.
- * @details The controller reads cached robot values at a fixed interval and
- * commands requested PWM values. It is intentionally separate from the
- * physical-response models so those models can be revised independently.
+ * @brief The template line follower, same as runLineFollower on the StampC3.
+ * @details Settings come from config/lokum.json so the twin and the robot
+ * run with the same numbers. Defaults match StampC3_Template/RobotConfig.h.
  */
 class Controller_c {
-  /** @brief Minimum interval between control/acquisition updates, in ms. */
-  final int UPDATE_INTERVAL_MS = 10;
-  /** @brief Interval reserved for telemetry work, in ms. */
-  final int TELEMETRY_INTERVAL_MS = 50;
-  final int RECOVERY_TIMEOUT_MS = 5000;
-  final float LINE_THRESHOLD = 1400;
-  // Keep these values aligned with StampC3_Template/Controller.h, except
-  // BASE_PWM: the twin's motor model (MotorsModel_c) gives 1.25 mm/s per PWM,
-  // so 70 drives the straights at 87.5 mm/s, near the real robot's 90 mm/s on
-  // the course with line_mode 1 (the firmware's base_pwm 45 would give 56 mm/s here).
-  final float BASE_PWM = 70;
-  final float LINE_FOLLOW_GAIN = 0.01;
-  final float RECOVERY_LEFT_PWM = -35.0;
-  final float RECOVERY_RIGHT_PWM = 35.0;
   final int WAITING = 0, FOLLOWING = 1, SEARCHING = 2, STOPPED = 3;
   int signal = 0, mode = WAITING;
   long recoveryStartMs = 0;
 
-  /** @brief TaskTimer_c to keep aligned with code from Arduino platform */
-  TaskTimer_c update_timer = new TaskTimer_c( UPDATE_INTERVAL_MS );
-  TaskTimer_c telemetry_timer = new TaskTimer_c( TELEMETRY_INTERVAL_MS );
-  
+  float lineThreshold, basePwm, lineFollowGain;
+  float recoveryLeftPwm, recoveryRightPwm, recoveryTimeoutMs;
 
-  /** @brief Returns the controller to its inactive waiting state. */
+  // the robot's own pose estimate, from encoder counts only
+  OdometryModel_c odometry;
+
+  TaskTimer_c update_timer;
+  TaskTimer_c telemetry_timer;
+  String telemetryLine = null;  // set on cycles where the robot would send telemetry
+
+  Controller_c(JSONObject cfg) {
+    lineThreshold = cfg.getFloat("line_threshold", 1400);
+    basePwm = cfg.getFloat("base_pwm", 45);
+    lineFollowGain = cfg.getFloat("line_follow_gain", 0.01);
+    recoveryLeftPwm = cfg.getFloat("recovery_left_pwm", -35);
+    recoveryRightPwm = cfg.getFloat("recovery_right_pwm", 35);
+    recoveryTimeoutMs = cfg.getFloat("recovery_timeout_ms", 5000);
+    update_timer = new TaskTimer_c(cfg.getInt("update_interval_ms", 10));
+    telemetry_timer = new TaskTimer_c(cfg.getInt("telemetry_interval_ms", 10));
+    odometry = new OdometryModel_c(cfg.getFloat("left_wheel_radius_mm", 16.0),
+      cfg.getFloat("right_wheel_radius_mm", 16.0), cfg.getFloat("wheel_separation_mm", 90.0));
+  }
+
   void reset() {
     signal = 0;
     mode = WAITING;
     recoveryStartMs = 0;
   }
-  
-  /** @return The latched start signal: 0 while waiting, 1 once started. */
+
   int getSignal() {
     return signal;
   }
-  /**
-   * @brief Updates the latched start signal.
-   * @param requested Zero resets the controller; a non-zero value starts it.
-   */
+
   void setSignal(int requested) {
     if (requested == 0) {
       reset();
@@ -54,56 +52,38 @@ class Controller_c {
       recoveryStartMs = 0;
     }
   }
-  /**
-   * @brief Runs at most one periodic controller update.
-   * @param robot Simulated robot supplying cached readings and accepting PWM.
-   * @note No update occurs until UPDATE_INTERVAL_MS has elapsed in simulation
-   * time.
-   */
+
   void update(Robot_c robot) {
+    telemetryLine = null;
     long now = robot.getMillis();
-    
-    if( !update_timer.isReady(now) ) {
-      return;
-    }
-    
-    update_timer.resetTimer( now );
+    if (!update_timer.isReady(now)) return;
+    update_timer.resetTimer(now);
 
     robot.getSurfaceSensors();
-    robot.getEncoders();
-    robot.getPose();
-    
-    if (signal == 1) {
-      runLineFollower(robot, now);
-    }
-    
-    if( telemetry_timer.isReady(now) ) {
+    odometry.update(robot.getLeftEncoderCount(), robot.getRightEncoderCount());
+
+    if (signal == 1) runLineFollower(robot, now);
+
+    if (telemetry_timer.isReady(now)) {
       telemetry_timer.resetTimer(now);
-      publishTelemetry(robot); // Note: in simulation this is a dummy call
+      publishTelemetry(robot, now);
     }
   }
-  
-  
-  
-  /** @brief Tests whether any surface channel is at or above the line threshold. */
+
   boolean lineDetected(Robot_c robot) {
-    if (robot.surface.reading[2] >= LINE_THRESHOLD) return true;
-    return false;
+    return robot.surface.reading[2] >= lineThreshold;
   }
-  
-  
-  /** @brief Applies following, search, or stopped motor commands. */
+
   void runLineFollower(Robot_c robot, long now) {
     boolean detected = lineDetected(robot);
     if (!detected && mode == FOLLOWING) {
       mode = SEARCHING;
       recoveryStartMs = now;
     }
-    
     if (mode == SEARCHING && detected) {
       mode = FOLLOWING;
     }
-    if (mode == SEARCHING && now - recoveryStartMs >= RECOVERY_TIMEOUT_MS) {
+    if (mode == SEARCHING && now - recoveryStartMs >= recoveryTimeoutMs) {
       mode = STOPPED;
     }
 
@@ -112,18 +92,21 @@ class Controller_c {
       return;
     }
     if (mode == SEARCHING) {
-      robot.setMotorPWM(RECOVERY_LEFT_PWM, RECOVERY_RIGHT_PWM);
+      robot.setMotorPWM(recoveryLeftPwm, recoveryRightPwm);
       return;
     }
-    
-    float turn = (robot.surface.reading[1] - robot.surface.reading[3]) * LINE_FOLLOW_GAIN;
-    robot.setMotorPWM(BASE_PWM - turn, BASE_PWM + turn);
+
+    float turn = (robot.surface.reading[1] - robot.surface.reading[3]) * lineFollowGain;
+    robot.setMotorPWM(basePwm - turn, basePwm + turn);
   }
-  /**
-   * @brief Placeholder matching the StampC3 controller's telemetry task.
-   * @note Simulator owns TCP reception and graphing. This empty method keeps
-   * the 50 ms controller task visible without creating a second transport.
-   */
-  void publishTelemetry(Robot_c robot) {
+
+  // Same 14 fields as the robot's telemetry, so both logs go through the same tools.
+  void publishTelemetry(Robot_c robot, long now) {
+    int[] r = robot.surface.reading;
+    telemetryLine = now + "," + String.format(java.util.Locale.ROOT, "%.2f,%.2f,%.5f",
+      odometry.pose.x, odometry.pose.y, odometry.pose.theta)
+      + "," + robot.motors.left.pwm + "," + robot.motors.right.pwm
+      + "," + robot.getLeftEncoderCount() + "," + robot.getRightEncoderCount()
+      + "," + r[0] + "," + r[1] + "," + r[2] + "," + r[3] + "," + r[4] + "," + signal;
   }
 }

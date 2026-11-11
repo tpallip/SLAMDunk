@@ -85,11 +85,6 @@ class WheelSpeedController_c {
     /** @brief Clears the target and integral. The speed estimate is kept. */
     void reset();
 
-    /** @brief Clears only the integral, keeping the target and setpoint ramp.
-     * @note For a sudden change of task (following to searching and back),
-     * where integral built up for the old one would overshoot the new one. */
-    void clearIntegral();
-
     /**
      * @brief Updates the speed estimate from one successful encoder read.
      * @param count Absolute encoder count for this wheel.
