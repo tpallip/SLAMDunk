@@ -216,6 +216,7 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
     }
     if(manual_vel) {
       left_speed.accel_mm_s2 = right_speed.accel_mm_s2 = config.values.accel_mm_s2;
+      left_speed.decel_mm_s2 = right_speed.decel_mm_s2 = 0.0f;
       float dt_s = (now - last_manual_ms) / 1000.0f;
       manual_left_pwm = left_speed.update(dt_s);
       manual_right_pwm = right_speed.update(dt_s);
@@ -564,6 +565,21 @@ void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
       robot.setMotorPWM(0, 0);
       return;
     }
+    if (speed_mode && config.values.search_speed_mm_s > 0.0f) {
+      if (now - last_enc_ok_ms > ENCODER_LOSS_MS) {
+        robot.setMotorPWM(0, 0);
+        return;
+      }
+      // Spin at wheel speeds; the wheels slow into it at search_decel_mm_s2
+      // rather than one being thrown from full speed into reverse.
+      float s = config.values.search_speed_mm_s;
+      left_speed.accel_mm_s2 = right_speed.accel_mm_s2 = 0.0f;
+      left_speed.decel_mm_s2 = right_speed.decel_mm_s2 = config.values.search_decel_mm_s2;
+      left_speed.setTarget(search_left ? -s : s);
+      right_speed.setTarget(search_left ? s : -s);
+      robot.setMotorPWM(left_speed.update(dt_s), right_speed.update(dt_s));
+      return;
+    }
     // recovery_left/right_pwm spin left; swapped they spin right
     if (search_left) {
       robot.setMotorPWM(config.values.recovery_left_pwm, config.values.recovery_right_pwm);
@@ -602,8 +618,9 @@ void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
   float turn_mm_s = error * config.values.line_gain_mm_s;
   float max_turn = fmaxf(v - config.values.line_min_mm_s, 0.0f);
   turn_mm_s = constrain(turn_mm_s, -max_turn, max_turn);
-  // No setpoint ramp: it would delay every steering change.
+  // No setpoint ramps: they would delay every steering change.
   left_speed.accel_mm_s2 = right_speed.accel_mm_s2 = 0.0f;
+  left_speed.decel_mm_s2 = right_speed.decel_mm_s2 = 0.0f;
   left_speed.setTarget(v - turn_mm_s);
   right_speed.setTarget(v + turn_mm_s);
   // Just after a search spin the speed estimate still shows the spin (one

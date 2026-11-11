@@ -109,6 +109,19 @@ void WheelSpeedController_c::measure(int32_t count, unsigned long now_ms, float 
 }
 
 void WheelSpeedController_c::stepSetpoint(float dt_s) {
+  // Slowing down, or reversing through zero: limited by decel_mm_s2.
+  bool slowing = setpoint_mm_s != 0.0f &&
+                 (target_mm_s * setpoint_mm_s < 0.0f || fabsf(target_mm_s) < fabsf(setpoint_mm_s));
+  if (decel_mm_s2 > 0.0f && slowing) {
+    float goal = target_mm_s * setpoint_mm_s < 0.0f ? 0.0f : target_mm_s;
+    float step = decel_mm_s2 * dt_s;
+    if (fabsf(goal - setpoint_mm_s) <= step) {
+      setpoint_mm_s = goal;
+    } else {
+      setpoint_mm_s += goal > setpoint_mm_s ? step : -step;
+    }
+    return;
+  }
   float direction = target_mm_s > 0.0f ? 1.0f : -1.0f;
   if (accel_mm_s2 <= 0.0f) {
     setpoint_mm_s = target_mm_s;
