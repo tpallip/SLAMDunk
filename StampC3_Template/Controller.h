@@ -142,9 +142,13 @@ class Controller_c {
     TaskTimer_c telemetry_timer;
     unsigned long recovery_start_ms;
     bool search_left = true;   // side the line was last seen on, so the search turns that way
+    float line_white[5], line_black[5];   // per-sensor levels from config
+    float line_norm[5] = {0};             // latest readings, 0 white to 1 black
 
-    /** @brief Returns whether any of DN2-DN4 is at or above config line_threshold. */
-    bool lineDetected(const Robot_c &robot) const;
+    /** @brief Scales the cached readings into line_norm. */
+    void normaliseSurface(const Robot_c &robot);
+    /** @brief Returns whether DN3 is at or above config line_level. */
+    bool lineDetected() const;
 
     /** @brief Clears manual PWM and speed targets, without sending a motor command. */
     void clearManual();

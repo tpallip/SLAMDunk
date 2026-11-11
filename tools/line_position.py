@@ -15,10 +15,10 @@ DN5 right). The search runs every 2 mm over +-50 mm, then every 0.5 mm within
 only DN1 or DN5 sees the line. The line counts as seen when any sensor reads
 at least line_detect_level.
 
-Levels, footprints, line width and detect level come from the "_surface"
-section of the robot's config file (dn<k>_white, dn<k>_black,
-dn<k>_sigma_mm, line_width_mm, line_detect_level). The logger doesn't send
-that section to the robot.
+Levels come from the robot's config file (dn<k>_white, dn<k>_black);
+footprints, line width and detect level from its "_surface" section
+(dn<k>_sigma_mm, line_width_mm, line_detect_level), which the logger
+doesn't send to the robot.
 
     python tools/line_position.py logs/run_x.csv
     python tools/line_position.py logs/run_x.csv --config config/lokum.json --plot
@@ -60,7 +60,7 @@ def load(path):
 
 def settings(path):
     c = json.loads(path.read_text())
-    c = c.get("_surface", c)
+    c = {**c, **c.get("_surface", {})}
     get = lambda key: float(c[key])
     return {"white": np.array([get(f"{s}_white") for s in SENSORS]),
             "black": np.array([get(f"{s}_black") for s in SENSORS]),

@@ -26,24 +26,30 @@
   "twist_left_lead_s": 0.058,
   "twist_right_lead_s": 0.044,
 
-  "line_threshold": 1400,
+  "dn1_white": 633,
+  "dn2_white": 666,
+  "dn3_white": 470,
+  "dn4_white": 643,
+  "dn5_white": 840,
+  "dn1_black": 1962,
+  "dn2_black": 2629,
+  "dn3_black": 1963,
+  "dn4_black": 2186,
+  "dn5_black": 2942,
+
+  "line_level": 0.3,
   "base_pwm": 45,
-  "line_follow_gain": 0.01,
+  "line_gain": 17.5,
   "recovery_left_pwm": -35,
   "recovery_right_pwm": 35,
   "recovery_timeout_ms": 5000,
 
+  "_twin": {
+    "line_threshold": 1400,
+    "line_follow_gain": 0.01
+  },
+
   "_surface": {
-    "dn1_white": 633,
-    "dn2_white": 666,
-    "dn3_white": 470,
-    "dn4_white": 643,
-    "dn5_white": 840,
-    "dn1_black": 1962,
-    "dn2_black": 2629,
-    "dn3_black": 1963,
-    "dn4_black": 2186,
-    "dn5_black": 2942,
     "dn1_sigma_mm": 2.90,
     "dn2_sigma_mm": 3.57,
     "dn3_sigma_mm": 3.54,

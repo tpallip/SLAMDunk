@@ -46,9 +46,20 @@ RobotConfig_c::RobotConfig_c() {
   add("twist_left_lead_s", &v.twist_left_lead_s, 0, 0.5f);
   add("twist_right_lead_s", &v.twist_right_lead_s, 0, 0.5f);
 
-  add("line_threshold", &v.line_threshold, 0, 65535);
+  add("dn1_white", &v.dn1_white, 0, 65535);
+  add("dn2_white", &v.dn2_white, 0, 65535);
+  add("dn3_white", &v.dn3_white, 0, 65535);
+  add("dn4_white", &v.dn4_white, 0, 65535);
+  add("dn5_white", &v.dn5_white, 0, 65535);
+  add("dn1_black", &v.dn1_black, 0, 65535);
+  add("dn2_black", &v.dn2_black, 0, 65535);
+  add("dn3_black", &v.dn3_black, 0, 65535);
+  add("dn4_black", &v.dn4_black, 0, 65535);
+  add("dn5_black", &v.dn5_black, 0, 65535);
+
+  add("line_level", &v.line_level, 0.05f, 1);
   add("base_pwm", &v.base_pwm, 0, 100);
-  add("line_follow_gain", &v.line_follow_gain, 0, 1);
+  add("line_gain", &v.line_gain, 0, 100);
   add("recovery_left_pwm", &v.recovery_left_pwm, -100, 100);
   add("recovery_right_pwm", &v.recovery_right_pwm, -100, 100);
   add("recovery_timeout_ms", &v.recovery_timeout_ms, 0, 60000);

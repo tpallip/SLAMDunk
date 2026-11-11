@@ -50,10 +50,22 @@ struct RobotConfigValues_t {
   float twist_left_lead_s = 0.088f;   // coast when stopping, s of travel at the wheel's speed
   float twist_right_lead_s = 0.079f;
 
+  // line sensors: each scaled from its own white (0) to black (1) on the course tape
+  float dn1_white = 633;
+  float dn2_white = 666;
+  float dn3_white = 470;
+  float dn4_white = 643;
+  float dn5_white = 840;
+  float dn1_black = 1962;
+  float dn2_black = 2629;
+  float dn3_black = 1963;
+  float dn4_black = 2186;
+  float dn5_black = 2942;
+
   // line follower
-  float line_threshold = 1400;
+  float line_level = 0.3f;    // a sensor sees the line at this much of the way to black
   float base_pwm = 45;
-  float line_follow_gain = 0.01f;
+  float line_gain = 17.5f;    // PWM of turn per unit of DN2 - DN4, normalised
   float recovery_left_pwm = -35;
   float recovery_right_pwm = 35;
   float recovery_timeout_ms = 5000;

@@ -28,12 +28,11 @@ class Robot_c {
     surfaceOffsetX = surfaceOffsetXIn;
     surfaceOffsetY = surfaceOffsetYIn;
     motors = new MotorsModel_c(cfg);
-    // measured sensor levels; under "_surface" so the logger doesn't send them to the robot
-    JSONObject levels = cfg.hasKey("_surface") ? cfg.getJSONObject("_surface") : new JSONObject();
+    // measured sensor levels, the same ones the robot normalises with
     for (int i = 0; i < 5; i++) {
       String dn = "dn" + (i + 1);
       sensors[i] = new SurfaceSensorModel_c(dn.toUpperCase(), 45, SENSOR_ANGLES[i],
-        levels.getFloat(dn + "_white", 400), levels.getFloat(dn + "_black", 2000));
+        cfg.getFloat(dn + "_white", 400), cfg.getFloat(dn + "_black", 2000));
     }
     resetForRun(0, 0, -PI / 2);
   }

@@ -4,7 +4,7 @@ class RobotSurface_c {
 
 /**
  * @brief One surface sensor: reads the map under it and scales from its own
- * white level to its own black level (dnN_white/dnN_black under "_surface" in lokum.json),
+ * white level to its own black level (dnN_white/dnN_black in lokum.json),
  * plus a little noise.
  */
 class SurfaceSensorModel_c {

@@ -19,9 +19,11 @@ class Controller_c {
   String telemetryLine = null;  // set on cycles where the robot would send telemetry
 
   Controller_c(JSONObject cfg) {
-    lineThreshold = cfg.getFloat("line_threshold", 1400);
+    // the twin still follows on raw counts; its settings sit under "_twin"
+    JSONObject twin = cfg.hasKey("_twin") ? cfg.getJSONObject("_twin") : cfg;
+    lineThreshold = twin.getFloat("line_threshold", 1400);
     basePwm = cfg.getFloat("base_pwm", 45);
-    lineFollowGain = cfg.getFloat("line_follow_gain", 0.01);
+    lineFollowGain = twin.getFloat("line_follow_gain", 0.01);
     recoveryLeftPwm = cfg.getFloat("recovery_left_pwm", -35);
     recoveryRightPwm = cfg.getFloat("recovery_right_pwm", 35);
     recoveryTimeoutMs = cfg.getFloat("recovery_timeout_ms", 5000);

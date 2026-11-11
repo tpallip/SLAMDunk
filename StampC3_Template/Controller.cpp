@@ -59,6 +59,13 @@ void Controller_c::applyConfig() {
   twist.stop_speed_mm_s = c.move_min_speed_mm_s;
   twist.left_stop_lead_s = c.twist_left_lead_s;
   twist.right_stop_lead_s = c.twist_right_lead_s;
+
+  const float whites[5] = {c.dn1_white, c.dn2_white, c.dn3_white, c.dn4_white, c.dn5_white};
+  const float blacks[5] = {c.dn1_black, c.dn2_black, c.dn3_black, c.dn4_black, c.dn5_black};
+  for (int i = 0; i < 5; i++) {
+    line_white[i] = whites[i];
+    line_black[i] = blacks[i];
+  }
 }
 
 void Controller_c::reset() {
@@ -220,15 +227,16 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
   }
 }
 
-bool Controller_c::lineDetected(const Robot_c &robot) const {
-  // Any of the middle three: DN3 alone slides off the line at corners while
-  // DN2 or DN4 still sees it, and the steering can bring it back.
-  for (int i = 1; i <= 3; i++) {
-    if (robot.surface.reading[i] >= config.values.line_threshold) {
-      return true;
-    }
+void Controller_c::normaliseSurface(const Robot_c &robot) {
+  for (int i = 0; i < 5; i++) {
+    float span = fmaxf(line_black[i] - line_white[i], 1.0f);
+    line_norm[i] = constrain((robot.surface.reading[i] - line_white[i]) / span, 0.0f, 1.0f);
   }
-  return false;
+}
+
+bool Controller_c::lineDetected() const {
+  // Only the central sensor decides whether the line is there.
+  return line_norm[2] >= config.values.line_level;
 }
 
 void Controller_c::startMove(Robot_c &robot, const char *name, float left_mm, float right_mm,
@@ -509,16 +517,17 @@ void Controller_c::handleConfigCommand(RobotWifiAP_c &server, const char *cmd, C
 }
 
 void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
-  bool line_detected = lineDetected(robot);
-  float threshold = config.values.line_threshold;
+  normaliseSurface(robot);
+  bool line_detected = lineDetected();
+  float level = config.values.line_level;
 
   if (!line_detected && mode == FOLLOWING_LINE) {
     mode = SEARCHING_FOR_LINE;
     recovery_start_ms = now;
     // An outer sensor may still see where the line went.
-    if (robot.surface.reading[0] >= threshold) {
+    if (line_norm[0] >= level) {
       search_left = true;
-    } else if (robot.surface.reading[4] >= threshold) {
+    } else if (line_norm[4] >= level) {
       search_left = false;
     }
   }
@@ -546,12 +555,13 @@ void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
     return;
   }
 
-  float error = (float)robot.surface.reading[1] - (float)robot.surface.reading[3];
+  // Same coverage under DN2 and DN4 gives 0, whichever sensor reads higher.
+  float error = line_norm[1] - line_norm[3];
   // DN2 darker: line on the left
   if (error != 0.0f) {
     search_left = error > 0.0f;
   }
-  float turn = error * config.values.line_follow_gain;
+  float turn = error * config.values.line_gain;
   float base = config.values.base_pwm;
   robot.setMotorPWM(base - turn, base + turn);
 }
