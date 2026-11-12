@@ -27,6 +27,8 @@ class Controller_c {
     static const unsigned long UPDATE_INTERVAL_MS = 10;
     /** @brief Interval between telemetry records in milliseconds. */
     static const unsigned long TELEMETRY_INTERVAL_MS = 50;
+    /** @brief Number of fresh sensor readings collected for each TCP trial. */
+    static const uint16_t TRIAL_SAMPLE_COUNT = 500;
     /** @brief Maximum line-search duration before the controller stops. */
     static const unsigned long RECOVERY_TIMEOUT_MS = 5000;
     /** @brief Surface-reading threshold used to decide whether a line is present. */
@@ -72,7 +74,11 @@ class Controller_c {
      * @note Each accepted update cycle attempts to refresh sensors, encoders,
      * and the middleware pose. Failed reads retain their previous cached values;
      * local odometry is updated only after a successful encoder read. The method
-     * returns early between update intervals.
+     * returns early between update intervals. A complete Serial line containing
+     * trial_no,percentage writes one sensor CSV record; no start-button press is
+     * required. TCP telemetry is opt-in. TCP clients may send START TELEMETRY,
+     * STOP TELEMETRY, TRIAL, STATUS, MOTOR, and STOP commands; motor PWM
+     * requests are limited to -100..100.
      */
     void update(Robot_c &robot, RobotWifiAP_c &server);
 
@@ -90,19 +96,58 @@ class Controller_c {
     TaskTimer_c update_timer;
     TaskTimer_c telemetry_timer;
     unsigned long recovery_start_ms;
+    char sensor_test_input[64];
+    uint8_t sensor_test_input_length;
+    bool sensor_test_input_overflow;
+    bool sensor_test_csv_header_printed;
+    char tcp_command_buffer[96];
+    uint8_t tcp_command_length;
+    bool tcp_command_overflow;
+    bool tcp_control_active;
+    bool tcp_telemetry_streaming;
+    bool tcp_trial_active;
+    long tcp_trial_number;
+    float tcp_trial_percentage;
+    uint16_t tcp_trial_samples_collected;
 
     /** @brief Returns whether cached DN3 is at or above LINE_THRESHOLD. */
     bool lineDetected(const Robot_c &robot) const;
 
     /** @brief Applies the nominal controller behaviour for the current mode. */
     void runLineFollower(Robot_c &robot, unsigned long now);
-    void sensorTest(Robot_c &robot, unsigned long now);
+    /** @brief Reads trial,percentage commands and writes CSV sensor records. */
+    void sensorTest(Robot_c &robot, bool surface_readings_updated);
+    /** @brief Parses a non-negative trial number and percentage from one CSV line. */
+    bool parseSensorTestInput(char *line, long &trial_number, float &percentage) const;
+    /** @brief Processes newline-delimited commands from the TCP client. */
+    void processTcpCommands(
+      Robot_c &robot,
+      RobotWifiAP_c &server,
+      bool surface_readings_updated,
+      unsigned long timestamp_ms
+    );
+    /** @brief Handles one validated line from the TCP client. */
+    void handleTcpCommand(
+      char *line,
+      Robot_c &robot,
+      RobotWifiAP_c &server,
+      bool surface_readings_updated,
+      unsigned long timestamp_ms
+    );
+    /** @brief Sends one fresh reading while a 500-sample TCP trial is active. */
+    void recordTcpTrialSample(
+      Robot_c &robot,
+      RobotWifiAP_c &server,
+      bool surface_readings_updated,
+      unsigned long timestamp_ms
+    );
 
     /**
      * @brief Sends the current controller and robot snapshot as one CSV record.
-     * @note Controller.cpp writes these 14 columns, in order: timestamp_ms,
-     * x, y, theta, left_pwm, right_pwm, left_count, right_count,
-     * DN1, DN2, DN3, DN4, DN5, signal. These labels are not sent as a header.
+     * @note Controller.cpp sends a DATA-prefixed record with these 14 values,
+     * in order: timestamp_ms, x, y, theta, left_pwm, right_pwm, left_count,
+     * right_count, DN1, DN2, DN3, DN4, DN5, signal. Labels are not sent as a
+     * header.
      * x and y are in mm and theta is in radians, from the local Euler estimate,
      * not robot.pose from I2C. PWM values are cached requests, not measured output.
      * The timestamp is the controller-cycle start time; it does not guarantee
