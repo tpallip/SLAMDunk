@@ -1,0 +1,12 @@
+run_20261112_162434.csv: 3886 rows, 36 not 10 ms apart
+  following rows compared: 2089 (following 1511, searching 578, stopped 0)
+  PWM exact 2089 (100.00 %), off by 1: 0, off by more: 0, max diff 0
+  odometry: max position diff 0.013 mm, max heading diff 0.00001 rad
+run_20261112_163737.csv: 2474 rows, 18 not 10 ms apart
+  following rows compared: 978 (following 528, searching 450, stopped 0)
+  PWM exact 978 (100.00 %), off by 1: 0, off by more: 0, max diff 0
+  odometry: max position diff 0.011 mm, max heading diff 0.00001 rad
+run_20261112_163827.csv: 2835 rows, 25 not 10 ms apart
+  following rows compared: 1319 (following 631, searching 688, stopped 0)
+  PWM exact 1319 (100.00 %), off by 1: 0, off by more: 0, max diff 0
+  odometry: max position diff 0.009 mm, max heading diff 0.00001 rad

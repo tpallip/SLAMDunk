@@ -146,6 +146,17 @@ medians unless it says otherwise.
   times a lap for 0.2 s. A fix is in the firmware (commit 559c237), not yet
   run on the robot.
 
+## Digital twin
+
+### Same controller as the robot? ([`twin_replay`](twin_replay/report.md))
+- **Question:** does the twin run exactly the same follower logic as the
+  robot?
+- **Answer:** yes. Fed the robot's logged sensor readings, encoder counts
+  and times, the twin's controller set the same PWM on all 4,386 following
+  cycles of three 120 mm/s runs, and its odometry agreed to 0.013 mm.
+- **Watch out:** so any difference between robot and twin runs comes from
+  the twin's models (sensors, motors, slip, timing), not the code.
+
 ## Not measured yet
 
 Taken from [`TODO.md`](../TODO.md): readings at 10 ms with at least 1000
