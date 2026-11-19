@@ -19,7 +19,15 @@ recovery_right_pwm) or the same swapped (a right spin) is searching, (0, 0)
 up to the end of the run is stopped, a shorter (0, 0) is the brake before a
 search spin and counts as searching, anything else is following. Settings and wheel size come from config/lokum.json. Line offsets
 come from tools/line_position.py on the logged sensor readings. Twin logs also
-have the true pose, so for those we get the odometry heading error too.
+have the true pose, so for those we get the odometry heading error and the
+true line offset (true_offset_*) too.
+
+abs_offset_* isn't comparable between robot and twin yet: line_position.py
+expects blurred readings, and the twin's sensors read one pixel, so on twin
+logs it only ever gives about 0 or +-5 mm. Use true_offset_* for the twin.
+
+Robot runs end where the robot was picked up: a stretch of all five sensors
+black that lasts to the end of the log is cut.
 """
 import argparse
 import csv
@@ -37,6 +45,9 @@ COUNTS_PER_REV = 358.3
 SPEED_STEP_MS = 50     # encoder window for speed
 STEER_SWING = 3         # PWM
 COURSE_CENTRE_MM = 140  # sideways from the home pose to the middle of the course
+SURFACE = Path(__file__).resolve().parent.parent / "DigitalTwin" / "surface.png"
+SURFACE_OFFSET_X_MM = 135.0   # DigitalTwin.pde, 1 px = 1 mm
+TRUE_OFFSET_AHEAD_MM = 40     # where the true offset is read, about DN2-DN4
 
 
 def parse_args():
@@ -50,13 +61,33 @@ def parse_args():
     return p.parse_args()
 
 
-def load(path, seconds):
+def load(path, seconds, cfg):
     with open(path) as f:
         rows = [r for r in csv.DictReader(f) if r["signal"] == "1"]
     if not rows:
         sys.exit(f"{path}: no rows with signal 1")
+    rows = drop_lift(rows, cfg, path)
     t0 = float(rows[0]["t_ms"])
     return [r for r in rows if float(r["t_ms"]) - t0 <= seconds * 1000]
+
+
+def drop_lift(rows, cfg, path):
+    """Cut the end of a run where all five sensors read black: the robot has
+    been picked up (the wheels keep turning in the air). No line covers all
+    five at once for more than a moment, so only a black stretch that lasts
+    to the end of the log is cut."""
+    level = cfg.get("line_level", 0.3)
+    n = len(rows)
+    while n > 0 and all(
+            (float(rows[n - 1][f"dn{i}"]) - cfg[f"dn{i}_white"]) / (cfg[f"dn{i}_black"] - cfg[f"dn{i}_white"]) >= level
+            for i in range(1, 6)):
+        n -= 1
+    if n < len(rows):
+        cut_s = (float(rows[-1]["t_ms"]) - float(rows[n - 1]["t_ms"])) / 1000 if n else 0
+        print(f"{Path(path).name}: cut the last {cut_s:.2f} s, all sensors black (picked up)", file=sys.stderr)
+    if n == 0:
+        sys.exit(f"{path}: all sensors black throughout")
+    return rows[:n]
 
 
 def col(rows, name):
@@ -81,6 +112,28 @@ def line_offsets(rows, config):
     return np.array([float(line[r["t_ms"]]["offset_mm"] or "nan") for r in rows])
 
 
+def true_offsets(rows):
+    """Twin only: the line's true sideways offset (mm, + left) TRUE_OFFSET_AHEAD_MM
+    ahead of the axle, read off the twin's map at its true pose."""
+    from PIL import Image
+    im = np.array(Image.open(SURFACE).convert("L")) < 128
+    h, w = im.shape
+    lat = np.arange(-50, 50.01, 0.25)
+    out = []
+    for r in rows:
+        x, y, th = float(r["true_x_mm"]), float(r["true_y_mm"]), float(r["true_theta_rad"])
+        c, s = math.cos(th), math.sin(th)
+        px = np.floor(w / 2 + x + TRUE_OFFSET_AHEAD_MM * c - lat * s - SURFACE_OFFSET_X_MM).astype(int)
+        py = np.floor(h / 2 - (y + TRUE_OFFSET_AHEAD_MM * s + lat * c)).astype(int)
+        ok = (px >= 0) & (px < w) & (py >= 0) & (py < h)
+        dark = np.zeros(len(lat), bool)
+        dark[ok] = im[py[ok], px[ok]]
+        d = np.diff(np.concatenate([[0], dark.astype(int), [0]]))
+        centres = [(lat[a] + lat[b - 1]) / 2 for a, b in zip(np.flatnonzero(d == 1), np.flatnonzero(d == -1))]
+        out.append(min(centres, key=abs) if centres else math.nan)
+    return np.array(out)
+
+
 def runs_of(mask):
     """(start, end) index pairs of each run of True, end exclusive."""
     d = np.diff(np.concatenate([[0], mask.astype(int), [0]]))
@@ -88,7 +141,7 @@ def runs_of(mask):
 
 
 def metrics(path, cfg, args):
-    rows = load(path, args.seconds)
+    rows = load(path, args.seconds, cfg)
     t = (col(rows, "t_ms") - float(rows[0]["t_ms"])) / 1000
     theta = col(rows, "theta_rad")
     pwm_l, pwm_r = col(rows, "pwm_left"), col(rows, "pwm_right")
@@ -153,6 +206,10 @@ def metrics(path, cfg, args):
         "abs_offset_med": np.nanmedian(abs(offset)),
         "abs_offset_p95": np.nanpercentile(abs(offset), 95),
     }
+    if "true_x_mm" in rows[0]:
+        true_off = true_offsets(rows)[following]
+        m["true_offset_med"] = np.nanmedian(abs(true_off))
+        m["true_offset_p95"] = np.nanpercentile(abs(true_off), 95)
     if "true_theta_rad" in rows[0]:
         true_theta = col(rows, "true_theta_rad")
         err = (theta[-1] - theta[0]) - (true_theta[-1] - true_theta[0])

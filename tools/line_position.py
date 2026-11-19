@@ -9,8 +9,8 @@ left of the robot's middle reads
 
     n(e) = Phi((y - e + w/2) / sigma) - Phi((y - e - w/2) / sigma)
 
-with the sensors on a 45 mm circle at 45, 14, 0, -14, -45 deg (DN1 left to
-DN5 right). The search runs every 2 mm over +-50 mm, then every 0.5 mm within
+with the sensors 30, 10, 0, -10, -30 mm to the left (DN1 to DN5, Pololu
+3pi+ drawing). The search runs every 2 mm over +-50 mm, then every 0.5 mm within
 2 mm of the best, with a parabola through the best point; a weak pull towards the previous offset picks the side when
 only DN1 or DN5 sees the line. The line counts as seen when any sensor reads
 at least line_detect_level.
@@ -33,8 +33,7 @@ import numpy as np
 from rich.console import Console
 
 SENSORS = ["dn1", "dn2", "dn3", "dn4", "dn5"]
-ANGLES_DEG = [45, 14, 0, -14, -45]     # DN1 (left) to DN5 (right); 0 is straight ahead
-RADIUS_MM = 45.0
+SENSOR_Y_MM = [30.0, 10.0, 0.0, -10.0, -30.0]   # DN1 (left) to DN5 (right)
 MAX_OFFSET_MM = 50.0
 STEP_MM = 0.5
 COARSE = 4                              # coarse search every 4 steps (2 mm)
@@ -75,7 +74,7 @@ def normal_cdf(z):
 class LineSensor:
     def __init__(self, cfg):
         self.cfg = cfg
-        self.y = RADIUS_MM * np.sin(np.radians(ANGLES_DEG))
+        self.y = np.array(SENSOR_Y_MM)
         self.offsets = np.arange(-MAX_OFFSET_MM, MAX_OFFSET_MM + STEP_MM / 2, STEP_MM)
         # predicted[i, j]: sensor i's reading with the line's middle at offsets[j]
         d = self.y[:, None] - self.offsets[None, :]

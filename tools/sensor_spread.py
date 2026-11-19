@@ -34,7 +34,7 @@ each sensor sees, w = 2 r cos(alpha0) sin(half arc). Usage:
 
     python tools/sensor_spread.py --spin 70 --turns 5 --both   # logger recording, robot on the edge
     python tools/sensor_spread.py logs/run_x.csv
-    python tools/sensor_spread.py logs/run_x.csv --radius 44 45 45 45 44 --plot
+    python tools/sensor_spread.py logs/run_x.csv --line --plot
     python tools/sensor_spread.py logs/run_x.csv --line --plot   # spun on a line
 
 --spin holds "cmd 0 <deg/s>" for --turns turns ("cmd" resent every 0.2 s),
@@ -55,7 +55,7 @@ from rich.console import Console
 from rich.table import Table
 
 SENSORS = ["dn1", "dn2", "dn3", "dn4", "dn5"]
-RADIUS_MM = 45.0          # sensor distance from the spin centre (DigitalTwin/RobotSimulation.pde)
+RADIUS_MM = [41.04, 41.23, 41.5, 41.23, 41.04]   # DN1-DN5 from the axle centre (Pololu 3pi+ drawing)
 WINDOW_MM = 15.0          # distance either side of each crossing used in the fit
 LOW_HIGH = (0.3, 0.7)     # hysteresis on the normalised reading for detecting crossings
 MIN_CONTRAST = 800        # black minus white, in raw units, needed to analyse a sensor (white ~500, black ~2900)
@@ -78,7 +78,7 @@ def parse_args():
     parser.add_argument("--turns", type=float, default=5.0, help="turns per direction for --spin (default: 5)")
     parser.add_argument("--both", action="store_true", help="with --spin, then spin the same turns the other way")
     parser.add_argument("--port", type=int, default=PORT, help=f"logger's teleop port for --spin (default: {PORT})")
-    parser.add_argument("--radius", type=float, nargs="+", default=[RADIUS_MM], metavar="MM",
+    parser.add_argument("--radius", type=float, nargs="+", default=RADIUS_MM, metavar="MM",
                         help=f"sensor distance from the spin centre in mm, one value or one per sensor (default: {RADIUS_MM})")
     parser.add_argument("--window", type=float, default=WINDOW_MM,
                         help=f"mm either side of a crossing to use (default: {WINDOW_MM})")

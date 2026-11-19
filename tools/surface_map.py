@@ -17,7 +17,7 @@ overlap. The heading scale tools/sensor_spread.py prints also converts to a
 separation: --separation (s / scale), s the separation the robot ran with
 (84.43 mm in config/lokum.json; 90 mm in runs before the geometry calibration).
 
-The five sensors sit on one 45 mm circle at different angles, so on a spin
+The five sensors sit 41-41.5 mm from the axle centre at different angles, so on a spin
 they sweep the same ring and their samples interleave, which sharpens edges
 beyond one sensor's sample spacing, but only if --angles matches the robot:
 each degree of error shifts that sensor's samples about 0.8 mm along the
@@ -40,8 +40,8 @@ import numpy as np
 from rich.console import Console
 
 SENSORS = ["dn1", "dn2", "dn3", "dn4", "dn5"]
-SENSOR_RADIUS_MM = 45.0                     # DigitalTwin/RobotSimulation.pde
-SENSOR_ANGLES_DEG = [45, 14, 0, -14, -45]   # dn1 (left) to dn5 (right); 0 is straight ahead
+SENSOR_RADIUS_MM = [41.04, 41.23, 41.5, 41.23, 41.04]   # Pololu 3pi+ drawing, from the axle centre
+SENSOR_ANGLES_DEG = [46.97, 14.04, 0, -14.04, -46.97]   # dn1 (left) to dn5 (right); 0 is straight ahead
 WHEEL_RADIUS_MM = 16.26                     # calibrated, config/lokum.json (bench/geometry)
 SEPARATION_MM = 84.43
 COUNTS_PER_REV = 358.3
@@ -60,7 +60,7 @@ def parse_args():
                         help=f"wheel radius in mm (default: {WHEEL_RADIUS_MM})")
     parser.add_argument("--counts-per-rev", type=float, default=COUNTS_PER_REV,
                         help=f"encoder counts per wheel turn (default: {COUNTS_PER_REV})")
-    parser.add_argument("--radius", type=float, nargs="+", default=[SENSOR_RADIUS_MM], metavar="MM",
+    parser.add_argument("--radius", type=float, nargs="+", default=SENSOR_RADIUS_MM, metavar="MM",
                         help=f"sensor distance from the wheel midpoint, one or five values (default: {SENSOR_RADIUS_MM})")
     parser.add_argument("--angles", type=float, nargs=5, default=SENSOR_ANGLES_DEG, metavar="DEG",
                         help=f"sensor angles dn1..dn5 in degrees (default: {SENSOR_ANGLES_DEG})")
