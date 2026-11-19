@@ -48,6 +48,7 @@
   "line_speed_mm_s": 120,
   "line_gain_mm_s": 55,
   "line_min_mm_s": 40,
+  "line_ki_mm_s": 300,
 
   "_surface": {
     "dn1_sigma_mm": 2.66,

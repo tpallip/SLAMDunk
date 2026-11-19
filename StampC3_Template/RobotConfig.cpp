@@ -68,6 +68,7 @@ RobotConfig_c::RobotConfig_c() {
   add("line_speed_mm_s", &v.line_speed_mm_s, 0, 250);
   add("line_gain_mm_s", &v.line_gain_mm_s, 0, 250);
   add("line_min_mm_s", &v.line_min_mm_s, 0, 150);
+  add("line_ki_mm_s", &v.line_ki_mm_s, 0, 1000);
 
   RobotConfigValues_t defaults;
   add("manual_max_pwm", &v.manual_max_pwm, 0, defaults.manual_max_pwm);

@@ -94,6 +94,7 @@ void Controller_c::setSignal(uint8_t requested_signal) {
     right_speed.reset();
     last_line_ms = 0;
     follow_start_ms = 0;
+    line_turn_i = 0.0f;
   }
 }
 
@@ -599,8 +600,14 @@ void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
     return;
   }
   float v = config.values.line_speed_mm_s * slow;
-  float turn_mm_s = error * config.values.line_gain_mm_s;
   float max_turn = fmaxf(v - config.values.line_min_mm_s, 0.0f);
+  // On a long curve the integral builds up the turn the curve needs, so the
+  // robot can ride the middle of the line instead of drifting out until
+  // DN2 - DN4 saturates and DN3 loses it. Kept through a search spin (the
+  // curve usually goes on) and limited to max_turn so it can't wind up.
+  line_turn_i += error * config.values.line_ki_mm_s * dt_s;
+  line_turn_i = constrain(line_turn_i, -max_turn, max_turn);
+  float turn_mm_s = error * config.values.line_gain_mm_s + line_turn_i;
   turn_mm_s = constrain(turn_mm_s, -max_turn, max_turn);
   // No setpoint ramp: it would delay every steering change.
   left_speed.accel_mm_s2 = right_speed.accel_mm_s2 = 0.0f;

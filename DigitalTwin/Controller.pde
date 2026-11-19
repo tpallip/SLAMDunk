@@ -15,7 +15,8 @@ class Controller_c {
   float[] lineNorm = new float[5];   // latest readings, 0 white to 1 black
   float recoveryLeftPwm, recoveryRightPwm, recoveryTimeoutMs;
   float searchBrakeMs, cornerSlow;
-  float lineSpeedMmS, lineGainMmS, lineMinMmS;
+  float lineSpeedMmS, lineGainMmS, lineMinMmS, lineKiMmS;
+  float lineTurnI = 0;   // integral part of the turn, mm/s
   long lastLineMs = 0;   // previous follower cycle, for the speed controllers' dt
   long followStartMs = 0;   // when following last (re)started
   float speedWindowMs;
@@ -47,6 +48,7 @@ class Controller_c {
     lineSpeedMmS = cfg.getFloat("line_speed_mm_s", 120);
     lineGainMmS = cfg.getFloat("line_gain_mm_s", 55);
     lineMinMmS = cfg.getFloat("line_min_mm_s", 40);
+    lineKiMmS = cfg.getFloat("line_ki_mm_s", 0);
     speedWindowMs = cfg.getFloat("speed_window_ms", 80);
     leftSpeed = speedController(cfg, "left");
     rightSpeed = speedController(cfg, "right");
@@ -93,6 +95,7 @@ class Controller_c {
       rightSpeed.reset();
       lastLineMs = 0;
       followStartMs = 0;
+      lineTurnI = 0;
     }
   }
 
@@ -196,8 +199,10 @@ class Controller_c {
 
     // Wheel speeds: each wheel's speed controller finds the PWM.
     float v = lineSpeedMmS * slow;
-    float turnMmS = error * lineGainMmS;
     float maxTurn = max(v - lineMinMmS, 0);
+    // The integral builds up the turn a long curve needs (see the StampC3 code).
+    lineTurnI = constrain(lineTurnI + error * lineKiMmS * dtS, -maxTurn, maxTurn);
+    float turnMmS = error * lineGainMmS + lineTurnI;
     turnMmS = constrain(turnMmS, -maxTurn, maxTurn);
     // No setpoint ramp: it would delay every steering change.
     leftSpeed.accelMmS2 = rightSpeed.accelMmS2 = 0;
