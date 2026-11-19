@@ -16,10 +16,10 @@ class SurfaceSensorModel_c {
   float localY;
   float white, black;
 
-  SurfaceSensorModel_c(String nameIn, float radiusMm, float angleDegrees, float whiteIn, float blackIn) {
+  SurfaceSensorModel_c(String nameIn, float xMm, float yMm, float whiteIn, float blackIn) {
     name = nameIn;
-    localX = radiusMm * cos(radians(angleDegrees));
-    localY = radiusMm * sin(radians(angleDegrees));
+    localX = xMm;
+    localY = yMm;
     white = whiteIn;
     black = blackIn;
   }

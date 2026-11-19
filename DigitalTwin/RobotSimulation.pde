@@ -6,7 +6,10 @@
 class Robot_c {
   final float bodyRadiusMm = 50.0;
   final float COUNTS_PER_REV = 358.3;
-  final float[] SENSOR_ANGLES = {45, 14, 0, -14, -45};
+  // DN1 to DN5 from the wheel axle centre, mm forward and left
+  // (Pololu 3pi+ 32U4 drawing, item 4973)
+  final float[] SENSOR_X = {28.0, 40.0, 41.5, 40.0, 28.0};
+  final float[] SENSOR_Y = {30.0, 10.0, 0.0, -10.0, -30.0};
 
   float leftRadiusMm, rightRadiusMm, separationMm;
   long simulationMillis = 0;
@@ -31,7 +34,7 @@ class Robot_c {
     // measured sensor levels, the same ones the robot normalises with
     for (int i = 0; i < 5; i++) {
       String dn = "dn" + (i + 1);
-      sensors[i] = new SurfaceSensorModel_c(dn.toUpperCase(), 45, SENSOR_ANGLES[i],
+      sensors[i] = new SurfaceSensorModel_c(dn.toUpperCase(), SENSOR_X[i], SENSOR_Y[i],
         cfg.getFloat(dn + "_white", 400), cfg.getFloat(dn + "_black", 2000));
     }
     resetForRun(0, 0, -PI / 2);
