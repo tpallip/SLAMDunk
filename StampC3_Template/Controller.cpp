@@ -95,6 +95,9 @@ void Controller_c::setSignal(uint8_t requested_signal) {
     last_line_ms = 0;
     follow_start_ms = 0;
     line_turn_i = 0.0f;
+    pad_cycles = 0;
+    started_on_pad = false;
+    left_start_pad = false;
   }
 }
 
@@ -168,7 +171,10 @@ void Controller_c::update(Robot_c &robot, RobotWifiAP_c &server) {
     // controller code.
     if (signal == 1) {
       runLineFollower(robot, now);
-
+    }
+    if (path_event != nullptr) {
+      reply(server, FROM_WIFI, "%s", path_event);
+      path_event = nullptr;
     }
   }
   else if(usr_mode == MOTOR_TEST) {
@@ -238,6 +244,13 @@ void Controller_c::normaliseSurface(const Robot_c &robot) {
     float span = fmaxf(line_black[i] - line_white[i], 1.0f);
     line_norm[i] = constrain((robot.surface.reading[i] - line_white[i]) / span, 0.0f, 1.0f);
   }
+}
+
+bool Controller_c::onPad() const {
+  for (int i = 0; i < 5; i++) {
+    if (line_norm[i] < PAD_LEVEL) return false;
+  }
+  return true;
 }
 
 bool Controller_c::lineDetected() const {
@@ -524,6 +537,29 @@ void Controller_c::handleConfigCommand(RobotWifiAP_c &server, const char *cmd, C
 
 void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
   normaliseSurface(robot);
+
+  // Path course: the run starts on the start pad and ends on the end pad,
+  // both black under all five sensors. The end pad only counts once the
+  // robot has left the start pad. Picking the robot up also reads all black,
+  // so that stops it too. Not counted in a search spin: facing straight
+  // across the line, all five sensors can sit on it for a moment.
+  bool on_pad = onPad();
+  pad_cycles = (on_pad && mode == FOLLOWING_LINE) ? pad_cycles + 1 : 0;
+  if (last_line_ms == 0) {
+    started_on_pad = on_pad;   // first cycle of the run
+  }
+  if (!on_pad && !left_start_pad) {
+    left_start_pad = true;
+    if (started_on_pad) {
+      path_event = "#I path: left the start pad\n";
+    }
+  }
+  if (left_start_pad && pad_cycles >= PAD_CYCLES) {
+    setSignal(0);
+    robot.setMotorPWM(0, 0);
+    path_event = "#I path: end pad, stopped\n";
+    return;
+  }
   bool line_detected = lineDetected();
   float level = config.values.line_level;
 

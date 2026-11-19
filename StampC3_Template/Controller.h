@@ -144,6 +144,13 @@ class Controller_c {
     unsigned long last_line_ms = 0;   // previous follower cycle, for the speed controllers' dt
     unsigned long follow_start_ms = 0; // when following last (re)started
     float line_turn_i = 0.0f;          // integral part of the follower's turn, mm/s
+    // Path course pads: a black band that covers all five sensors at once.
+    static constexpr float PAD_LEVEL = 0.5f;   // each sensor at least this black
+    static constexpr int PAD_CYCLES = 3;        // in a row, so one odd reading can't stop the run
+    int pad_cycles = 0;
+    bool started_on_pad = false;
+    bool left_start_pad = false;
+    const char *path_event = nullptr;   // pad message to send after this cycle
     bool search_left = true;   // side the line was last seen on, so the search turns that way
     float line_white[5], line_black[5];   // per-sensor levels from config
     float line_norm[5] = {0};             // latest readings, 0 white to 1 black
@@ -152,6 +159,7 @@ class Controller_c {
     void normaliseSurface(const Robot_c &robot);
     /** @brief Returns whether DN3 is at or above config line_level. */
     bool lineDetected() const;
+    bool onPad() const;
 
     /** @brief Clears manual PWM and speed targets, without sending a motor command. */
     void clearManual();

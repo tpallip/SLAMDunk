@@ -17,6 +17,11 @@ class Controller_c {
   float searchBrakeMs, cornerSlow;
   float lineSpeedMmS, lineGainMmS, lineMinMmS, lineKiMmS;
   float lineTurnI = 0;   // integral part of the turn, mm/s
+  // Path course pads, as on the StampC3: all five sensors black
+  final float PAD_LEVEL = 0.5;
+  final int PAD_CYCLES = 3;
+  int padCycles = 0;
+  boolean leftStartPad = false;
   long lastLineMs = 0;   // previous follower cycle, for the speed controllers' dt
   long followStartMs = 0;   // when following last (re)started
   float speedWindowMs;
@@ -96,6 +101,8 @@ class Controller_c {
       lastLineMs = 0;
       followStartMs = 0;
       lineTurnI = 0;
+      padCycles = 0;
+      leftStartPad = false;
     }
   }
 
@@ -125,6 +132,13 @@ class Controller_c {
     }
   }
 
+  boolean onPad() {
+    for (int i = 0; i < 5; i++) {
+      if (lineNorm[i] < PAD_LEVEL) return false;
+    }
+    return true;
+  }
+
   boolean lineDetected() {
     // Only the central sensor decides whether the line is there.
     return lineNorm[2] >= lineLevel;
@@ -132,6 +146,17 @@ class Controller_c {
 
   void runLineFollower(Robot_c robot, long now) {
     normaliseSurface(robot);
+
+    // Path course: stop on the end pad once the start pad is left behind
+    // (not counted in a search spin, as on the StampC3).
+    boolean onPad = onPad();
+    padCycles = (onPad && mode == FOLLOWING) ? padCycles + 1 : 0;
+    if (!onPad) leftStartPad = true;
+    if (leftStartPad && padCycles >= PAD_CYCLES) {
+      setSignal(0);
+      robot.setMotorPWM(0, 0);
+      return;
+    }
     boolean detected = lineDetected();
 
     boolean speedMode = lineSpeedMmS > 0;
