@@ -1,0 +1,1420 @@
+run,along_mm,line_offset_mm
+record (follower),0.0,-4.50
+record (follower),0.1,-4.50
+record (follower),0.1,-4.50
+record (follower),0.1,-4.50
+record (follower),0.3,-4.50
+record (follower),0.4,-4.50
+record (follower),0.4,-4.50
+record (follower),0.6,-4.50
+record (follower),0.6,-4.50
+record (follower),0.6,-4.50
+record (follower),0.9,-4.50
+record (follower),1.4,-4.50
+record (follower),1.7,-4.50
+record (follower),2.3,-4.50
+record (follower),3.3,-4.50
+record (follower),4.6,-4.50
+record (follower),5.9,-4.50
+record (follower),7.3,-4.50
+record (follower),9.0,-3.93
+record (follower),10.7,-3.68
+record (follower),12.4,-3.71
+record (follower),14.4,-4.01
+record (follower),16.1,-4.49
+record (follower),18.3,-5.10
+record (follower),20.2,-5.37
+record (follower),22.2,-5.89
+record (follower),24.1,-6.18
+record (follower),26.1,-6.43
+record (follower),28.1,-6.56
+record (follower),29.9,-6.65
+record (follower),31.8,-6.47
+record (follower),33.8,-6.41
+record (follower),35.6,-6.27
+record (follower),37.4,-5.92
+record (follower),39.2,-5.36
+record (follower),41.1,-4.49
+record (follower),42.6,-3.27
+record (follower),44.3,-2.50
+record (follower),46.1,-1.55
+record (follower),47.6,-0.64
+record (follower),49.2,0.04
+record (follower),50.8,0.44
+record (follower),52.5,1.41
+record (follower),54.2,2.38
+record (follower),55.6,3.47
+record (follower),57.2,4.56
+record (follower),58.6,5.68
+record (follower),60.0,6.39
+record (follower),61.6,7.05
+record (follower),63.0,7.41
+record (follower),64.4,8.05
+record (follower),65.9,7.88
+record (follower),67.3,8.15
+record (follower),68.7,8.40
+record (follower),70.2,8.44
+record (follower),71.7,8.38
+record (follower),73.0,8.73
+record (follower),74.6,8.36
+record (follower),76.0,8.24
+record (follower),77.3,8.39
+record (follower),78.7,8.27
+record (follower),80.0,7.96
+record (follower),81.4,7.78
+record (follower),82.7,7.66
+record (follower),84.1,7.49
+record (follower),85.4,7.10
+record (follower),86.7,6.88
+record (follower),88.1,6.58
+record (follower),89.3,6.48
+record (follower),90.7,6.21
+record (follower),92.0,5.85
+record (follower),93.2,5.71
+record (follower),94.5,4.96
+record (follower),95.8,4.38
+record (follower),97.1,3.91
+record (follower),98.2,3.46
+record (follower),99.4,3.09
+record (follower),100.8,2.65
+record (follower),101.9,2.11
+record (follower),103.1,1.74
+record (follower),104.4,1.57
+record (follower),105.5,1.07
+record (follower),106.9,0.73
+record (follower),108.1,0.50
+record (follower),109.4,0.11
+record (follower),110.5,-0.02
+record (follower),111.8,-0.25
+record (follower),113.1,-0.50
+record (follower),114.3,-0.56
+record (follower),115.5,-0.70
+record (follower),116.8,-0.69
+record (follower),117.9,-1.08
+record (follower),119.2,-0.90
+record (follower),120.3,-1.00
+record (follower),121.5,-0.97
+record (follower),122.6,-0.92
+record (follower),123.9,-0.94
+record (follower),125.0,-0.93
+record (follower),126.2,-0.87
+record (follower),127.5,-0.60
+record (follower),128.7,-0.45
+record (follower),130.0,-0.40
+record (follower),131.2,-0.24
+record (follower),132.2,0.01
+record (follower),133.5,0.01
+record (follower),134.6,0.25
+record (follower),135.7,0.48
+record (follower),137.0,0.59
+record (follower),138.2,0.78
+record (follower),139.1,0.99
+record (follower),140.3,1.19
+record (follower),141.6,1.31
+record (follower),142.7,1.43
+record (follower),144.0,1.74
+record (follower),145.1,1.74
+record (follower),146.4,1.96
+record (follower),147.7,1.86
+record (follower),149.0,2.00
+record (follower),150.1,2.30
+record (follower),151.6,2.40
+record (follower),152.7,2.43
+record (follower),154.0,2.68
+record (follower),155.1,2.71
+record (follower),156.5,2.75
+record (follower),157.7,2.71
+record (follower),159.1,2.83
+record (follower),160.3,2.88
+record (follower),161.5,2.82
+record (follower),162.8,2.84
+record (follower),164.1,2.68
+record (follower),165.5,2.58
+record (follower),166.8,2.48
+record (follower),168.1,2.15
+record (follower),169.5,1.97
+record (follower),170.8,1.64
+record (follower),171.9,1.54
+record (follower),173.2,1.28
+record (follower),174.2,0.84
+record (follower),175.5,0.78
+record (follower),176.8,0.58
+record (follower),177.9,0.41
+record (follower),179.4,0.05
+record (follower),180.5,-0.09
+record (follower),181.8,-0.30
+record (follower),182.9,-0.45
+record (follower),184.1,-0.64
+record (follower),185.3,-0.90
+record (follower),186.6,-1.12
+record (follower),187.8,-1.21
+record (follower),189.1,-1.26
+record (follower),190.2,-1.49
+record (follower),191.5,-1.50
+record (follower),192.8,-1.56
+record (follower),193.8,-1.37
+record (follower),195.0,-1.56
+record (follower),196.2,-1.57
+record (follower),197.3,-1.37
+record (follower),198.5,-1.36
+record (follower),199.6,-1.38
+record (follower),200.9,-1.14
+record (follower),202.0,-1.12
+record (follower),203.2,-1.18
+record (follower),204.3,-1.05
+record (follower),205.4,-0.79
+record (follower),206.7,-0.52
+record (follower),208.0,-0.38
+record (follower),209.2,-0.16
+record (follower),210.3,0.06
+record (follower),211.7,0.14
+record (follower),212.7,0.37
+record (follower),214.0,0.56
+record (follower),215.4,0.93
+record (follower),216.4,1.12
+record (follower),217.6,1.13
+record (follower),218.7,1.07
+record (follower),220.1,1.18
+record (follower),221.3,1.22
+record (follower),222.4,1.15
+record (follower),223.6,0.99
+record (follower),224.8,0.96
+record (follower),226.1,0.58
+record (follower),227.3,0.28
+record (follower),228.4,0.11
+record (follower),229.7,-0.23
+record (follower),231.0,-0.47
+record (follower),232.4,-0.80
+record (follower),233.4,-1.13
+record (follower),234.8,-1.64
+record (follower),236.1,-2.01
+record (follower),237.2,-2.47
+record (follower),238.4,-3.01
+record (follower),239.7,-3.56
+record (follower),240.7,-4.26
+record (follower),241.8,-5.04
+record (follower),243.1,-5.56
+record (follower),244.1,-5.77
+record (follower),245.2,-6.09
+record (follower),246.4,-6.45
+record (follower),247.4,-6.39
+record (follower),248.6,-6.51
+record (follower),249.6,-6.62
+record (follower),250.8,-6.82
+record (follower),251.9,-6.85
+record (follower),253.2,-6.58
+record (follower),254.2,-6.42
+record (follower),255.3,-6.41
+record (follower),256.5,-6.32
+record (follower),257.6,-6.34
+record (follower),258.8,-6.38
+record (follower),259.9,-6.04
+record (follower),261.2,-6.00
+record (follower),262.3,-5.77
+record (follower),263.6,-5.32
+record (follower),264.8,-5.44
+record (follower),266.0,-5.23
+record (follower),267.2,-4.89
+record (follower),268.5,-4.67
+record (follower),269.6,-4.47
+record (follower),271.0,-4.19
+record (follower),272.2,-3.92
+record (follower),273.3,-3.56
+record (follower),274.6,-3.42
+record (follower),275.9,-3.03
+record (follower),277.0,-2.56
+record (follower),278.2,-2.53
+record (follower),279.6,-2.13
+record (follower),280.7,-1.62
+record (follower),282.1,-1.45
+record (follower),283.3,-1.41
+record (follower),284.4,-0.94
+record (follower),285.7,-0.84
+record (follower),287.1,-0.69
+record (follower),288.3,-0.57
+record (follower),289.6,-0.52
+record (follower),290.7,-0.50
+record (follower),292.1,-0.61
+record (follower),293.4,-0.51
+record (follower),294.5,-0.61
+record (follower),295.8,-0.71
+record (follower),297.1,-0.57
+record (follower),298.3,-0.68
+record (follower),299.5,-0.72
+record (follower),300.7,-0.61
+record (follower),301.8,-0.80
+record (follower),303.0,-1.01
+record (follower),304.1,-1.23
+record (follower),305.4,-1.21
+record (follower),306.7,-1.76
+record (follower),307.8,-1.53
+record (follower),309.0,-1.72
+record (follower),310.0,-1.81
+record (follower),311.2,-2.07
+record (follower),312.4,-2.13
+record (follower),313.5,-0.46
+record (follower),314.8,-1.42
+record (follower),315.8,-2.47
+record (follower),317.1,-2.32
+record (follower),318.4,-1.88
+record (follower),319.5,-1.73
+record (follower),320.6,-1.91
+record (follower),321.9,-1.60
+record (follower),323.2,-1.76
+record (follower),324.3,-1.65
+record (follower),325.5,-1.69
+record (follower),326.8,-1.56
+record (follower),327.9,-1.14
+record (follower),329.1,-1.01
+record (follower),330.3,-0.81
+record (follower),331.3,-0.72
+record (follower),332.6,-0.71
+record (follower),333.8,-0.56
+record (follower),334.9,-0.30
+record (follower),336.2,-0.23
+record (follower),337.5,-0.03
+record (follower),338.6,0.03
+record (follower),339.9,-0.09
+record (follower),341.0,0.04
+record (follower),342.5,-0.01
+record (follower),343.6,-0.15
+record (follower),344.7,-0.26
+record (follower),346.0,-0.22
+record (follower),347.2,-0.31
+record (follower),348.3,-0.32
+record (follower),349.4,-0.47
+record (follower),350.7,-0.65
+record (follower),352.0,-0.78
+record (follower),353.3,-0.84
+record (follower),354.4,-0.95
+record (follower),355.7,-0.95
+record (follower),356.9,-0.81
+record (follower),358.0,-0.51
+record (follower),359.1,-0.36
+record (follower),360.4,-0.22
+record (follower),361.6,-0.25
+record (follower),362.7,-0.05
+record (follower),364.0,0.30
+record (follower),365.1,0.55
+record (follower),366.4,0.92
+record (follower),367.5,1.24
+record (follower),368.7,1.73
+record (follower),370.0,2.02
+record (follower),371.3,2.60
+record (follower),372.5,3.18
+record (follower),373.7,3.72
+record (follower),375.0,3.95
+record (follower),376.2,4.37
+record (follower),377.5,4.79
+record (follower),378.8,5.08
+record (follower),380.1,5.43
+record (follower),381.2,5.77
+record (follower),382.5,5.86
+record (follower),383.7,5.76
+record (follower),384.9,6.29
+record (follower),386.1,6.30
+record (follower),387.4,6.62
+record (follower),388.6,6.73
+record (follower),389.9,7.02
+record (follower),391.1,7.14
+record (follower),392.4,7.09
+record (follower),393.5,7.27
+record (follower),394.8,7.29
+record (follower),395.9,7.64
+record (follower),397.3,7.69
+record (follower),398.6,7.47
+record (follower),399.9,7.24
+record (follower),401.0,7.37
+record (follower),402.3,7.38
+record (follower),403.6,7.28
+record (follower),404.8,7.26
+record (follower),406.0,7.19
+record (follower),407.2,7.06
+record (follower),408.5,6.84
+record (follower),409.6,6.77
+record (follower),410.9,6.72
+record (follower),412.2,6.87
+record (follower),413.5,6.34
+record (follower),414.6,6.19
+record (follower),416.0,5.70
+record (follower),417.2,5.51
+record (follower),418.4,4.95
+record (follower),419.7,4.43
+record (follower),421.0,4.08
+record (follower),422.3,3.72
+record (follower),423.4,3.39
+record (follower),424.6,3.08
+record (follower),425.9,2.53
+record (follower),427.1,2.31
+record (follower),428.1,1.80
+record (follower),429.4,1.75
+record (follower),430.6,1.34
+record (follower),431.7,1.22
+record (follower),433.0,0.83
+record (follower),434.1,0.59
+record (follower),435.4,0.22
+record (follower),436.4,0.29
+record (follower),437.5,-0.01
+record (follower),438.7,-0.08
+record (follower),439.8,-0.35
+record (follower),441.0,-0.42
+record (follower),442.3,-0.51
+record (follower),443.4,-0.62
+record (follower),444.4,-0.64
+record (follower),445.7,-0.68
+record (follower),446.7,-0.63
+record (follower),447.8,-0.63
+record (follower),449.2,-0.61
+record (follower),450.2,-0.59
+record (follower),451.4,-0.45
+record (follower),452.5,-0.46
+record (follower),453.8,-0.32
+record (follower),454.8,-0.24
+record (follower),455.9,-0.15
+record (follower),457.2,0.06
+record (follower),458.4,0.19
+record (follower),459.5,0.26
+record (follower),460.6,0.47
+record (follower),461.8,0.55
+record (follower),462.9,0.89
+record (follower),464.2,0.94
+record (follower),465.4,1.18
+record (follower),466.5,1.35
+record (follower),467.8,1.37
+record (follower),469.1,1.58
+record (follower),470.2,1.82
+record (follower),471.5,1.86
+record (follower),472.6,2.10
+record (follower),473.9,2.20
+record (follower),475.0,2.31
+record (follower),476.3,2.31
+record (follower),477.6,2.58
+record (follower),479.0,2.76
+record (follower),480.2,2.83
+record (follower),481.5,2.77
+record (follower),482.9,2.91
+record (follower),484.0,3.16
+record (follower),485.5,3.00
+record (follower),486.7,3.16
+record (follower),488.2,2.97
+record (follower),489.5,2.97
+record (follower),491.0,3.06
+record (follower),492.3,3.03
+record (follower),493.6,2.83
+record (follower),495.0,2.97
+record (follower),496.3,2.98
+record (follower),497.4,2.67
+record (follower),499.0,2.80
+record (follower),500.1,2.50
+record (follower),501.6,2.50
+record (follower),502.7,2.28
+record (follower),504.0,2.44
+record (follower),505.4,2.03
+record (follower),506.7,2.08
+record (follower),508.0,2.03
+record (follower),509.3,2.07
+record (follower),510.4,1.84
+record (follower),511.7,1.80
+record (follower),513.0,1.62
+record (follower),514.1,1.54
+record (follower),515.4,1.53
+record (follower),516.7,1.23
+record (follower),518.0,1.12
+record (follower),519.2,1.07
+record (follower),520.5,0.92
+record (follower),521.7,0.79
+record (follower),523.0,0.84
+record (follower),524.2,0.51
+record (follower),525.5,0.32
+record (follower),526.8,0.30
+record (follower),527.9,0.34
+record (follower),529.4,0.03
+record (follower),530.7,-0.11
+record (follower),531.8,-0.13
+record (follower),533.2,-0.23
+record (follower),534.4,-0.44
+record (follower),535.6,-0.62
+record (follower),536.9,-0.93
+record (follower),538.1,-0.99
+record (follower),539.3,-0.88
+record (follower),540.6,-1.07
+record (follower),541.8,-1.30
+record (follower),542.9,-1.42
+record (follower),544.2,-1.56
+record (follower),545.3,-1.54
+record (follower),546.5,-1.85
+record (follower),547.8,-2.01
+record (follower),549.0,-2.06
+record (follower),550.0,-2.20
+record (follower),551.2,-2.23
+record (follower),552.5,-2.47
+record (follower),553.6,-2.51
+record (follower),554.7,-2.52
+record (follower),555.9,-2.37
+record (follower),557.0,-2.32
+record (follower),558.3,-2.38
+record (follower),559.3,-2.08
+record (follower),560.6,-1.80
+record (follower),561.9,-1.82
+record (follower),563.0,-1.66
+record (follower),564.0,-1.23
+record (follower),565.3,-0.86
+record (follower),566.6,-0.85
+record (follower),567.6,-0.58
+record (follower),569.0,-0.27
+record (follower),570.1,-0.12
+record (follower),571.3,0.22
+record (follower),572.6,0.51
+record (follower),573.7,0.85
+record (follower),574.8,0.95
+record (follower),576.3,1.30
+record (follower),577.3,1.35
+record (follower),578.4,1.67
+record (follower),579.7,1.39
+record (follower),581.1,1.54
+record (follower),582.4,1.85
+record (follower),583.7,1.67
+record (follower),584.8,1.92
+record (follower),586.3,1.86
+record (follower),587.4,1.92
+record (follower),588.7,1.83
+record (follower),590.1,2.17
+record (follower),591.4,1.96
+record (follower),592.7,2.27
+record (follower),593.8,2.09
+record (follower),595.1,2.21
+record (follower),596.5,2.11
+record (follower),597.8,2.12
+record (follower),599.1,2.12
+record (follower),600.2,1.93
+record (follower),601.6,1.97
+record (follower),602.9,2.13
+record (follower),604.1,1.93
+record (follower),605.4,1.92
+record (follower),606.6,1.58
+record (follower),607.8,1.47
+record (follower),609.1,1.28
+record (follower),610.2,1.08
+record (follower),611.5,0.75
+record (follower),612.9,0.52
+record (follower),613.9,0.31
+record (follower),615.3,-0.12
+record (follower),616.5,-0.43
+record (follower),617.8,-0.72
+record (follower),619.0,-1.04
+record (follower),620.3,-1.16
+record (follower),621.7,-1.32
+record (follower),623.0,-1.80
+record (follower),624.2,-2.28
+record (follower),625.3,-2.68
+record (follower),626.6,-2.92
+record (follower),627.7,-3.82
+record (follower),629.0,-4.32
+record (follower),630.2,-5.23
+record (follower),631.4,-5.53
+record (follower),632.4,-6.25
+record (follower),633.7,-6.43
+record (follower),634.7,-6.61
+record (follower),636.0,-6.83
+record (follower),637.1,-6.89
+record (follower),638.1,-7.05
+record (follower),639.4,-6.97
+record (follower),640.6,-7.13
+record (follower),641.7,-6.93
+record (follower),642.7,-6.84
+record (follower),644.0,-6.71
+record (follower),645.1,-6.56
+record (follower),646.3,-6.53
+record (follower),647.3,-6.45
+record (follower),648.5,-6.08
+record (follower),649.7,-5.64
+record (follower),650.8,-5.30
+record (follower),652.0,-4.83
+record (follower),653.1,-4.58
+record (follower),654.3,-4.23
+record (follower),655.4,-3.71
+record (follower),656.7,-3.26
+record (follower),657.8,-3.16
+record (follower),658.8,-3.02
+record (follower),660.1,-2.52
+record (follower),661.2,-2.11
+record (follower),662.5,-1.68
+record (follower),663.7,-1.37
+record (follower),664.9,-0.98
+record (follower),666.2,-0.63
+record (follower),667.5,-0.36
+record (follower),668.8,0.07
+record (follower),670.1,0.29
+record (follower),671.4,0.57
+record (follower),672.6,0.84
+record (follower),674.1,0.90
+record (follower),675.4,1.15
+record (follower),676.6,1.09
+record (follower),677.8,1.20
+record (follower),679.2,1.19
+record (follower),680.5,1.20
+record (follower),681.8,0.99
+record (follower),683.1,1.06
+record (follower),684.2,0.69
+record (follower),685.5,0.50
+record (follower),686.8,0.31
+record (follower),688.0,0.03
+record (follower),689.2,-0.21
+record (follower),690.5,-0.36
+record (follower),691.6,-0.55
+record (follower),692.9,-0.76
+record (follower),694.0,-0.87
+record (follower),695.3,-0.93
+record (follower),696.3,-1.29
+record (follower),697.5,-1.29
+record (follower),698.6,-1.69
+record (follower),699.7,-1.73
+record (follower),700.9,-1.72
+record (follower),702.2,-2.02
+record (follower),703.3,-2.09
+record (follower),704.4,-2.13
+record (follower),705.6,-1.99
+record (follower),706.7,-1.99
+record (follower),707.9,-2.22
+record (follower),709.0,-1.98
+record (follower),710.1,-2.10
+record (follower),711.4,-1.64
+record (follower),712.6,-1.75
+record (follower),713.7,-1.57
+record (follower),715.0,-1.40
+record (follower),716.0,-1.19
+record (follower),717.3,-1.08
+record (follower),718.6,-0.81
+record (follower),719.7,-0.81
+record (follower),721.0,-0.45
+record (follower),722.3,-0.21
+record (follower),723.3,-0.08
+record (follower),724.5,0.25
+record (follower),725.7,0.37
+record (follower),727.1,0.57
+record (follower),728.4,0.66
+record (follower),729.5,0.75
+record (follower),730.8,0.85
+record (follower),732.1,0.93
+record (follower),733.4,0.96
+record (follower),734.7,1.16
+record (follower),736.0,1.07
+record (follower),737.2,0.93
+record (follower),738.4,0.87
+record (follower),739.7,0.85
+record (follower),740.9,0.77
+record (follower),741.9,0.51
+record (follower),743.2,0.59
+record (follower),744.4,0.48
+record (follower),745.6,0.30
+record (follower),746.8,0.33
+record (follower),747.9,0.13
+record (follower),749.2,-0.00
+record (follower),750.5,-0.29
+record (follower),751.6,-0.23
+record (follower),752.8,-0.45
+record (follower),753.9,-0.60
+record (follower),755.1,-0.65
+record (follower),756.1,-0.67
+record (follower),757.3,-0.71
+record (follower),758.5,-0.90
+record (follower),759.5,-0.96
+record (follower),760.6,-1.06
+record (follower),761.9,-1.09
+record (follower),763.0,-1.15
+record (follower),764.2,-1.20
+record (follower),765.3,-1.28
+record (follower),766.5,-1.46
+record (follower),767.6,-1.18
+record (follower),768.6,-1.34
+record (follower),769.9,-1.29
+record (follower),771.0,-1.12
+record (follower),772.2,-0.96
+record (follower),773.3,-0.92
+record (follower),774.6,-0.80
+record (follower),775.9,-0.70
+record (follower),777.0,-0.48
+record (follower),778.1,-0.32
+record (follower),779.4,0.00
+record (follower),780.7,0.01
+record (follower),782.0,0.17
+record (follower),783.3,0.40
+record (follower),784.4,0.53
+record (follower),785.7,0.64
+record (follower),787.0,0.69
+record (follower),788.3,0.76
+record (follower),789.4,0.79
+record (follower),790.6,0.96
+record (follower),791.8,0.90
+record (follower),793.1,0.91
+record (follower),794.3,0.99
+record (follower),795.5,0.72
+record (follower),797.0,0.82
+record (follower),798.1,0.68
+record (follower),799.4,0.52
+record (follower),800.7,0.35
+record (follower),801.8,0.25
+record (follower),803.0,0.12
+record (follower),804.2,-0.08
+record (follower),805.4,-0.00
+record (follower),806.5,-0.31
+record (follower),807.7,-0.49
+record (follower),808.9,-0.46
+record (follower),810.1,-0.62
+record (follower),811.4,-0.70
+record (follower),812.5,-0.84
+record (follower),813.8,-0.72
+record (follower),814.9,-0.91
+record (follower),816.1,-0.82
+record (follower),817.2,-0.95
+record (follower),818.2,-0.89
+record (follower),819.4,-0.88
+record (follower),820.5,-0.75
+record (follower),821.8,-0.91
+record (follower),822.9,-0.77
+record (follower),824.2,-0.81
+record (follower),825.2,-0.70
+record (follower),826.6,-0.56
+record (follower),827.9,-0.51
+record (follower),829.0,-0.36
+record (follower),830.2,-0.44
+record (follower),831.5,-0.25
+record (follower),832.6,-0.20
+record (follower),833.9,-0.13
+record (follower),835.2,0.19
+record (follower),836.3,0.21
+record (follower),837.6,0.51
+record (follower),838.7,0.44
+record (follower),840.0,0.58
+record (follower),841.2,0.61
+record (follower),842.4,0.88
+record (follower),843.6,0.81
+record (follower),844.9,0.77
+record (follower),846.0,0.82
+record (follower),847.2,0.94
+record (follower),848.4,0.85
+record (follower),849.6,0.84
+record (follower),850.9,0.85
+record (follower),852.1,0.76
+record (follower),853.1,0.55
+record (follower),854.4,0.26
+record (follower),855.6,-0.04
+record (follower),856.7,-1.41
+record (follower),857.8,-2.94
+record (follower),859.1,-3.79
+record (follower),860.1,-4.54
+record (follower),861.4,-4.50
+record (follower),862.5,-4.50
+replay_01,0.0,-4.50
+replay_01,0.0,-4.50
+replay_01,0.0,-4.50
+replay_01,0.0,-4.50
+replay_01,0.0,-4.50
+replay_01,0.0,-4.50
+replay_01,0.0,-4.50
+replay_01,0.0,-4.50
+replay_01,0.1,-4.50
+replay_01,0.3,-4.50
+replay_01,0.6,-4.50
+replay_01,1.1,-4.50
+replay_01,1.7,-4.50
+replay_01,2.1,-4.50
+replay_01,2.8,-4.50
+replay_01,3.9,4.67
+replay_01,4.8,4.74
+replay_01,6.0,4.56
+replay_01,7.6,3.71
+replay_01,8.6,2.15
+replay_01,10.4,1.15
+replay_01,12.7,0.81
+replay_01,13.5,0.71
+replay_01,16.0,0.58
+replay_01,17.1,0.54
+replay_01,19.4,0.66
+replay_01,21.1,0.83
+replay_01,23.2,1.24
+replay_01,24.4,1.31
+replay_01,26.4,1.62
+replay_01,28.1,2.08
+replay_01,29.8,2.87
+replay_01,30.8,3.13
+replay_01,32.8,3.68
+replay_01,34.4,4.59
+replay_01,35.5,5.50
+replay_01,37.6,6.75
+replay_01,38.6,7.13
+replay_01,40.3,8.25
+replay_01,41.8,8.77
+replay_01,43.2,9.27
+replay_01,44.8,10.06
+replay_01,45.8,10.17
+replay_01,47.5,10.35
+replay_01,48.3,10.68
+replay_01,49.9,10.94
+replay_01,51.2,11.00
+replay_01,52.6,11.00
+replay_01,54.0,11.01
+replay_01,55.3,14.31
+replay_01,56.5,11.01
+replay_01,57.9,10.99
+replay_01,59.3,10.88
+replay_01,60.2,10.70
+replay_01,61.6,10.44
+replay_01,62.9,10.35
+replay_01,64.0,10.45
+replay_01,65.3,10.23
+replay_01,66.4,10.06
+replay_01,67.7,10.18
+replay_01,69.1,10.15
+replay_01,69.7,9.68
+replay_01,71.1,9.77
+replay_01,72.7,9.69
+replay_01,73.4,9.81
+replay_01,75.0,9.98
+replay_01,76.0,10.04
+replay_01,77.3,10.24
+replay_01,78.4,10.37
+replay_01,80.0,10.82
+replay_01,81.3,10.94
+replay_01,82.0,10.30
+replay_01,83.5,10.56
+replay_01,84.4,10.73
+replay_01,86.0,11.17
+replay_01,86.7,11.02
+replay_01,88.3,12.97
+replay_01,89.7,12.12
+replay_01,90.4,11.21
+replay_01,91.7,13.82
+replay_01,93.1,13.93
+replay_01,94.0,13.93
+replay_01,95.4,14.58
+replay_01,96.7,14.55
+replay_01,97.8,15.12
+replay_01,98.9,14.76
+replay_01,100.7,15.04
+replay_01,101.5,15.06
+replay_01,102.8,15.50
+replay_01,103.9,15.75
+replay_01,105.4,16.02
+replay_01,106.9,15.76
+replay_01,107.8,15.98
+replay_01,109.1,15.51
+replay_01,110.6,15.77
+replay_01,111.3,15.88
+replay_01,112.8,15.88
+replay_01,114.2,15.91
+replay_01,114.9,15.49
+replay_01,116.2,15.50
+replay_01,117.3,15.50
+replay_01,118.8,15.65
+replay_01,119.5,15.63
+replay_01,120.8,16.14
+replay_01,122.0,16.21
+replay_01,123.2,16.11
+replay_01,124.3,16.49
+replay_01,125.0,16.26
+replay_01,126.3,16.32
+replay_01,127.9,16.60
+replay_01,128.7,16.47
+replay_01,130.2,16.57
+replay_01,131.2,16.67
+replay_01,132.7,16.72
+replay_01,133.6,16.84
+replay_01,134.9,16.91
+replay_01,136.3,17.07
+replay_01,137.0,16.92
+replay_01,138.4,17.05
+replay_01,139.4,17.02
+replay_01,140.9,16.92
+replay_01,141.9,16.91
+replay_01,143.6,17.00
+replay_01,144.6,17.01
+replay_01,145.8,17.03
+replay_01,147.3,17.22
+replay_01,148.1,17.22
+replay_01,149.7,17.25
+replay_01,150.6,17.24
+replay_01,152.3,17.26
+replay_01,153.1,17.31
+replay_01,154.5,
+replay_01,156.0,17.44
+replay_01,157.0,17.46
+replay_01,158.3,17.46
+replay_01,159.4,17.40
+replay_01,161.0,17.53
+replay_01,161.5,
+replay_01,163.2,
+replay_01,164.7,
+replay_01,166.1,
+replay_01,167.0,
+replay_01,168.5,
+replay_01,169.4,
+replay_01,170.5,
+replay_01,171.8,
+replay_01,173.1,
+replay_01,173.9,
+replay_01,175.4,17.48
+replay_01,176.7,17.43
+replay_01,177.5,17.30
+replay_01,178.8,
+replay_01,179.8,17.23
+replay_01,180.9,17.21
+replay_01,182.5,16.91
+replay_01,183.2,16.91
+replay_01,184.6,17.10
+replay_01,185.8,16.92
+replay_01,187.1,16.96
+replay_01,188.3,17.22
+replay_01,189.8,16.91
+replay_01,190.6,16.81
+replay_01,192.2,16.71
+replay_01,192.8,16.67
+replay_01,194.2,16.66
+replay_01,195.5,16.65
+replay_01,196.6,16.69
+replay_01,197.5,16.51
+replay_01,199.0,16.45
+replay_01,199.9,16.33
+replay_01,201.3,16.42
+replay_01,202.4,16.46
+replay_01,203.2,16.29
+replay_01,204.6,16.16
+replay_01,205.9,16.13
+replay_01,207.0,16.02
+replay_01,208.3,15.88
+replay_01,209.0,15.74
+replay_01,210.7,16.08
+replay_01,211.4,16.13
+replay_01,213.0,16.00
+replay_01,213.7,15.73
+replay_01,215.3,15.79
+replay_01,216.1,15.88
+replay_01,217.6,15.97
+replay_01,218.7,15.77
+replay_01,220.0,15.80
+replay_01,221.3,15.97
+replay_01,222.4,15.99
+replay_01,223.7,16.27
+replay_01,225.1,16.55
+replay_01,226.4,16.64
+replay_01,227.0,16.89
+replay_01,228.5,17.28
+replay_01,229.7,
+replay_01,231.0,
+replay_01,232.1,
+replay_01,233.8,
+replay_01,234.4,
+replay_01,235.8,
+replay_01,237.1,
+replay_01,238.4,
+replay_01,239.8,
+replay_01,240.4,
+replay_01,241.8,
+replay_01,242.9,
+replay_01,244.1,
+replay_01,245.4,
+replay_01,246.9,
+replay_01,247.5,
+replay_01,248.9,
+replay_01,250.4,
+replay_01,251.5,
+replay_01,252.9,
+replay_01,253.5,
+replay_01,255.2,
+replay_01,256.1,
+replay_01,257.2,
+replay_01,258.5,
+replay_01,259.6,
+replay_01,260.9,
+replay_01,262.0,
+replay_01,263.2,
+replay_01,264.5,
+replay_01,265.5,
+replay_01,266.9,22.67
+replay_01,267.6,22.63
+replay_01,269.0,23.25
+replay_01,270.2,23.47
+replay_01,271.6,23.77
+replay_01,272.3,24.03
+replay_01,274.0,24.20
+replay_01,274.9,24.30
+replay_01,276.2,24.36
+replay_01,277.2,24.69
+replay_01,278.6,24.47
+replay_01,279.7,24.66
+replay_01,281.0,24.85
+replay_01,281.9,25.24
+replay_01,283.1,25.66
+replay_01,284.9,25.51
+replay_01,285.6,26.01
+replay_01,286.6,26.05
+replay_01,288.3,25.96
+replay_01,289.4,25.91
+replay_01,290.6,25.19
+replay_01,291.8,26.23
+replay_01,293.0,25.99
+replay_01,294.0,26.27
+replay_01,295.7,25.94
+replay_01,296.4,25.70
+replay_01,297.7,25.42
+replay_01,299.1,25.71
+replay_01,300.2,25.43
+replay_01,301.5,25.52
+replay_01,302.5,25.97
+replay_01,304.1,25.79
+replay_01,304.7,26.74
+replay_01,306.4,26.28
+replay_01,307.2,26.32
+replay_01,308.7,26.42
+replay_01,309.5,26.76
+replay_01,311.1,26.07
+replay_01,311.8,25.96
+replay_01,313.5,26.07
+replay_01,314.2,25.54
+replay_01,315.7,25.68
+replay_01,316.9,25.70
+replay_01,317.5,25.78
+replay_01,319.1,26.34
+replay_01,320.2,25.51
+replay_01,321.8,26.02
+replay_01,322.3,26.38
+replay_01,323.8,26.21
+replay_01,325.2,26.04
+replay_01,326.1,26.35
+replay_01,327.6,26.42
+replay_01,328.6,25.49
+replay_01,330.0,24.84
+replay_01,331.3,24.89
+replay_01,332.6,25.26
+replay_01,333.9,25.19
+replay_01,335.3,25.73
+replay_01,336.5,26.07
+replay_01,337.6,26.20
+replay_01,338.9,26.21
+replay_01,340.0,27.62
+replay_01,341.3,27.74
+replay_01,342.6,27.10
+replay_01,343.9,27.63
+replay_01,345.2,27.73
+replay_01,346.3,27.67
+replay_01,347.4,29.04
+replay_01,348.7,28.14
+replay_01,350.2,29.51
+replay_01,350.9,29.70
+replay_01,352.4,27.06
+replay_01,353.6,26.72
+replay_01,354.7,26.33
+replay_01,356.0,26.19
+replay_01,357.3,26.61
+replay_01,358.1,27.86
+replay_01,359.3,27.71
+replay_01,360.8,25.74
+replay_01,362.3,25.92
+replay_01,363.3,26.29
+replay_01,364.6,26.33
+replay_01,366.0,26.26
+replay_01,367.1,25.68
+replay_01,368.1,25.97
+replay_01,369.4,25.74
+replay_01,370.5,25.23
+replay_01,372.1,25.73
+replay_01,372.8,25.94
+replay_01,374.7,26.30
+replay_01,375.5,25.70
+replay_01,377.1,25.74
+replay_01,378.0,26.38
+replay_01,379.8,25.47
+replay_01,380.4,26.11
+replay_01,381.9,27.20
+replay_01,383.4,26.67
+replay_01,384.1,26.57
+replay_01,385.4,25.96
+replay_01,386.8,25.12
+replay_01,387.5,25.45
+replay_01,388.9,25.97
+replay_01,389.9,25.51
+replay_01,391.2,25.78
+replay_01,392.6,25.95
+replay_01,393.4,26.42
+replay_01,394.9,25.70
+replay_01,395.8,26.33
+replay_01,397.1,26.38
+replay_01,398.5,26.38
+replay_01,399.5,26.02
+replay_01,400.9,25.75
+replay_01,401.8,25.97
+replay_01,403.2,25.13
+replay_01,404.8,25.30
+replay_01,405.5,25.71
+replay_01,407.0,25.33
+replay_01,408.5,25.72
+replay_01,409.3,26.09
+replay_01,410.7,25.28
+replay_01,412.0,25.58
+replay_01,413.3,26.07
+replay_01,414.2,25.97
+replay_01,415.7,25.44
+replay_01,417.0,25.21
+replay_01,417.7,25.22
+replay_01,419.3,25.41
+replay_01,420.0,25.67
+replay_01,421.7,26.04
+replay_01,422.6,26.06
+replay_01,423.7,25.92
+replay_01,424.9,25.91
+replay_01,426.3,26.27
+replay_01,427.1,26.70
+replay_01,428.6,26.34
+replay_01,429.4,26.71
+replay_01,431.3,26.74
+replay_01,432.0,26.38
+replay_01,433.3,26.69
+replay_01,434.7,27.97
+replay_01,435.7,27.65
+replay_01,437.0,26.81
+replay_01,438.1,26.56
+replay_01,439.1,26.22
+replay_01,440.7,27.09
+replay_01,441.7,26.61
+replay_01,443.1,26.22
+replay_01,444.0,26.70
+replay_01,445.5,26.65
+replay_01,446.4,26.74
+replay_01,447.7,25.75
+replay_01,448.9,26.04
+replay_01,450.4,26.02
+replay_01,451.1,26.22
+replay_01,452.5,26.39
+replay_01,453.8,26.05
+replay_01,455.2,26.24
+replay_01,455.9,26.01
+replay_01,457.4,26.59
+replay_01,458.6,26.72
+replay_01,459.9,27.15
+replay_01,460.9,26.60
+replay_01,462.2,25.91
+replay_01,463.6,25.90
+replay_01,464.9,26.21
+replay_01,465.9,26.08
+replay_01,466.9,26.21
+replay_01,468.3,27.00
+replay_01,469.3,26.57
+replay_01,470.9,26.69
+replay_01,471.8,26.24
+replay_01,473.3,25.72
+replay_01,474.2,26.25
+replay_01,475.8,25.70
+replay_01,476.6,26.21
+replay_01,478.0,25.19
+replay_01,479.0,25.52
+replay_01,480.5,25.20
+replay_01,481.5,25.98
+replay_01,483.0,25.98
+replay_01,484.0,26.71
+replay_01,485.2,26.33
+replay_01,486.6,26.60
+replay_01,487.6,25.21
+replay_01,489.0,25.40
+replay_01,490.1,25.03
+replay_01,490.9,25.97
+replay_01,492.4,25.63
+replay_01,493.7,24.99
+replay_01,494.6,24.97
+replay_01,495.9,24.26
+replay_01,497.1,23.74
+replay_01,498.0,24.01
+replay_01,499.4,23.33
+replay_01,500.6,23.19
+replay_01,501.7,22.75
+replay_01,503.1,
+replay_01,504.3,
+replay_01,505.6,
+replay_01,506.8,
+replay_01,508.0,
+replay_01,509.5,
+replay_01,510.3,
+replay_01,511.7,
+replay_01,512.7,
+replay_01,514.2,
+replay_01,515.5,
+replay_01,516.4,
+replay_01,518.0,
+replay_01,518.7,
+replay_01,520.0,
+replay_01,521.1,
+replay_01,522.9,
+replay_01,523.7,
+replay_01,524.8,17.40
+replay_01,525.9,16.92
+replay_01,527.4,16.36
+replay_01,528.2,16.24
+replay_01,529.6,15.77
+replay_01,530.4,15.40
+replay_01,531.5,14.54
+replay_01,533.2,14.19
+replay_01,534.2,13.61
+replay_01,535.5,12.13
+replay_01,536.3,11.18
+replay_01,537.5,12.74
+replay_01,539.1,10.66
+replay_01,540.1,10.42
+replay_01,541.0,10.42
+replay_01,542.5,9.51
+replay_01,543.5,9.30
+replay_01,544.8,8.87
+replay_01,545.9,8.31
+replay_01,547.0,7.97
+replay_01,548.3,7.12
+replay_01,549.5,6.45
+replay_01,552.0,4.84
+replay_01,552.7,4.62
+replay_01,554.2,3.86
+replay_01,555.3,3.16
+replay_01,556.6,2.27
+replay_01,557.9,1.71
+replay_01,559.0,0.98
+replay_01,560.3,0.31
+replay_01,561.4,-0.20
+replay_01,563.0,-0.72
+replay_01,563.6,-1.05
+replay_01,565.0,-1.78
+replay_01,566.4,-2.85
+replay_01,567.3,-3.28
+replay_01,568.9,-4.34
+replay_01,569.6,-4.88
+replay_01,570.8,-5.69
+replay_01,572.3,-6.24
+replay_01,573.1,-6.64
+replay_01,574.6,-7.17
+replay_01,576.0,-7.38
+replay_01,577.1,-7.99
+replay_01,578.4,-8.33
+replay_01,579.3,-8.71
+replay_01,580.8,-9.05
+replay_01,581.7,-9.61
+replay_01,583.1,-14.76
+replay_01,584.3,-14.80
+replay_01,585.7,-14.97
+replay_01,586.5,-14.80
+replay_01,588.0,-15.19
+replay_01,589.1,-15.55
+replay_01,590.7,-15.71
+replay_01,591.4,-15.86
+replay_01,593.1,-16.52
+replay_01,593.8,-16.73
+replay_01,595.7,-17.14
+replay_01,596.5,-17.24
+replay_01,598.2,
+replay_01,598.9,
+replay_01,600.8,
+replay_01,601.5,
+replay_01,603.1,
+replay_01,604.2,
+replay_01,605.5,
+replay_01,607.1,
+replay_01,607.9,
+replay_01,609.2,
+replay_01,610.5,
+replay_01,611.6,
+replay_01,613.2,
+replay_01,613.8,
+replay_01,615.0,
+replay_01,616.3,-22.54
+replay_01,617.3,-22.71
+replay_01,618.8,-22.96
+replay_01,619.5,-23.08
+replay_01,620.7,-23.37
+replay_01,622.0,-23.51
+replay_01,622.9,-23.53
+replay_01,624.2,-23.66
+replay_01,625.5,-23.82
+replay_01,626.2,-23.97
+replay_01,627.6,-24.05
+replay_01,629.0,-24.14
+replay_01,629.7,-24.04
+replay_01,631.3,-23.80
+replay_01,632.4,-23.97
+replay_01,633.6,-23.88
+replay_01,634.9,-23.97
+replay_01,636.0,-23.78
+replay_01,637.0,-23.70
+replay_01,638.4,-23.61
+replay_01,639.3,-23.61
+replay_01,640.7,-23.41
+replay_01,642.1,-23.50
+replay_01,643.3,-23.39
+replay_01,644.7,-23.28
+replay_01,646.1,-23.14
+replay_01,647.1,-23.20
+replay_01,648.5,-23.14
+replay_01,649.8,-22.82
+replay_01,651.3,-22.68
+replay_01,652.1,-22.63
+replay_01,653.8,
+replay_01,654.5,
+replay_01,656.0,
+replay_01,657.1,
+replay_01,658.1,
+replay_01,659.8,
+replay_01,660.7,
+replay_01,661.7,
+replay_01,662.9,
+replay_01,664.4,
+replay_01,665.1,
+replay_01,666.7,
+replay_01,667.8,
+replay_01,669.1,
+replay_01,670.2,
+replay_01,671.4,
+replay_01,672.6,
+replay_01,673.6,
+replay_01,675.5,
+replay_01,676.1,
+replay_01,677.4,
+replay_01,678.5,
+replay_01,679.8,
+replay_01,681.2,
+replay_01,682.1,
+replay_01,683.5,
+replay_01,684.3,
+replay_01,686.2,
+replay_01,686.8,
+replay_01,688.2,
+replay_01,689.3,
+replay_01,690.9,
+replay_01,691.6,
+replay_01,693.0,
+replay_01,694.5,
+replay_01,695.3,
+replay_01,697.0,
+replay_01,697.9,
+replay_01,699.4,
+replay_01,700.3,
+replay_01,702.0,
+replay_01,702.7,
+replay_01,704.3,
+replay_01,705.1,
+replay_01,706.9,
+replay_01,707.6,
+replay_01,709.0,
+replay_01,710.1,
+replay_01,711.3,
+replay_01,712.6,
+replay_01,713.8,
+replay_01,715.3,
+replay_01,716.1,
+replay_01,717.3,
+replay_01,718.7,
+replay_01,719.8,
+replay_01,721.7,
+replay_01,722.3,-17.45
+replay_01,723.5,-17.40
+replay_01,724.7,-17.15
+replay_01,725.8,-17.28
+replay_01,727.2,-17.38
+replay_01,728.1,-17.02
+replay_01,729.5,-16.77
+replay_01,730.7,-16.64
+replay_01,732.1,-16.87
+replay_01,732.7,-16.49
+replay_01,734.1,-16.44
+replay_01,735.4,-16.32
+replay_01,736.8,-16.62
+replay_01,737.5,-16.36
+replay_01,739.1,-16.17
+replay_01,740.2,-16.23
+replay_01,741.6,-16.16
+replay_01,742.4,-16.08
+replay_01,743.9,-16.32
+replay_01,745.4,-16.04
+replay_01,746.1,-16.04
+replay_01,747.6,-16.07
+replay_01,748.6,-16.36
+replay_01,750.1,-16.08
+replay_01,750.9,-16.04
+replay_01,752.5,-15.90
+replay_01,753.2,-15.88
+replay_01,754.9,-15.75
+replay_01,755.6,-15.77
+replay_01,756.9,-15.60
+replay_01,758.3,-15.60
+replay_01,759.0,-15.36
+replay_01,760.7,-15.44
+replay_01,761.5,-15.19
+replay_01,762.6,-15.17
+replay_01,764.2,-15.01
+replay_01,765.3,-14.73
+replay_01,766.2,-14.94
+replay_01,767.6,-14.46
+replay_01,768.6,-15.38
+replay_01,770.3,-15.52
+replay_01,770.9,-14.98
+replay_01,772.3,-10.24
+replay_01,773.9,-14.73
+replay_01,774.6,-10.19
+replay_01,776.0,-10.17
+replay_01,777.7,-10.24
+replay_01,778.4,-9.99
+replay_01,779.7,-9.96
+replay_01,780.9,-9.85
+replay_01,782.1,-9.62
+replay_01,783.4,-9.49
+replay_01,784.8,-9.30
+replay_01,785.6,-9.42
+replay_01,787.0,-9.16
+replay_01,788.4,-9.12
+replay_01,789.1,-9.10
+replay_01,790.7,-9.36
+replay_01,791.5,-9.13
+replay_01,793.0,-8.81
+replay_01,794.4,-8.78
+replay_01,795.4,-8.66
+replay_01,796.4,-8.65
+replay_01,798.0,-8.75
+replay_01,798.7,-8.46
+replay_01,800.0,-8.40
+replay_01,801.1,-8.23
+replay_01,802.7,-8.34
+replay_01,803.4,-8.15
+replay_01,805.1,-8.00
+replay_01,805.8,-7.88
+replay_01,807.2,-8.07
+replay_01,808.7,-7.75
+replay_01,809.5,-7.65
+replay_01,810.9,-7.67
+replay_01,811.8,-7.46
+replay_01,813.2,-7.32
+replay_01,814.1,-7.36
+replay_01,815.4,-7.36
+replay_01,816.8,-7.20
+replay_01,817.5,-6.99
+replay_01,818.8,-6.98
+replay_01,820.1,-6.86
+replay_01,821.5,-6.87
+replay_01,822.5,-6.73
+replay_01,823.9,-6.68
+replay_01,824.9,-6.76
+replay_01,826.3,-6.28
+replay_01,827.2,-6.22
+replay_01,828.9,-5.89
+replay_01,830.0,-5.78
+replay_01,830.9,-5.77
+replay_01,832.3,-5.55
+replay_01,833.5,-5.55
+replay_01,834.7,-5.53
+replay_01,835.9,-5.44
+replay_01,837.5,-5.47
+replay_01,838.2,-5.38
+replay_01,839.6,-5.22
+replay_01,840.9,-5.11
+replay_01,842.4,-5.10
+replay_01,843.3,-5.18
+replay_01,844.6,-5.05
+replay_01,846.0,-4.89
+replay_01,847.2,-4.90
+replay_01,847.9,-4.92
+replay_01,849.6,-4.68
+replay_01,850.3,-4.70
+replay_01,851.7,-4.50
+replay_01,852.6,-4.29
+replay_01,854.1,-3.92
