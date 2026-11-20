@@ -547,6 +547,7 @@ void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
   pad_cycles = (on_pad && mode == FOLLOWING_LINE) ? pad_cycles + 1 : 0;
   if (last_line_ms == 0) {
     started_on_pad = on_pad;   // first cycle of the run
+    run_start_ms = now;
   }
   if (!on_pad && !left_start_pad) {
     left_start_pad = true;
@@ -636,6 +637,15 @@ void Controller_c::runLineFollower(Robot_c &robot, unsigned long now) {
     return;
   }
   float v = config.values.line_speed_mm_s * slow;
+  // Speed up gently from rest on an S-curve (smoothstep: acceleration starts
+  // and ends at zero). Jumping to full speed kicks both wheels to ~100 PWM
+  // and they spin for a moment, which turns the robot without the encoders
+  // seeing it.
+  float ramp_ms = config.values.line_start_ramp_ms;
+  if (ramp_ms > 0.0f && now - run_start_ms < ramp_ms) {
+    float k = (now - run_start_ms) / ramp_ms;
+    v *= k * k * (3.0f - 2.0f * k);
+  }
   float max_turn = fmaxf(v - config.values.line_min_mm_s, 0.0f);
   // On a long curve the integral builds up the turn the curve needs, so the
   // robot can ride the middle of the line instead of drifting out until

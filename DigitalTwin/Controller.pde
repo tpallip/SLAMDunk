@@ -17,6 +17,8 @@ class Controller_c {
   float searchBrakeMs, cornerSlow;
   float lineSpeedMmS, lineGainMmS, lineMinMmS, lineKiMmS;
   float lineTurnI = 0;   // integral part of the turn, mm/s
+  float lineStartRampMs;
+  long runStartMs = 0;   // first follower cycle of the run
   // Path course pads, as on the StampC3: all five sensors black
   final float PAD_LEVEL = 0.5;
   final int PAD_CYCLES = 3;
@@ -54,6 +56,7 @@ class Controller_c {
     lineGainMmS = cfg.getFloat("line_gain_mm_s", 55);
     lineMinMmS = cfg.getFloat("line_min_mm_s", 40);
     lineKiMmS = cfg.getFloat("line_ki_mm_s", 0);
+    lineStartRampMs = cfg.getFloat("line_start_ramp_ms", 0);
     speedWindowMs = cfg.getFloat("speed_window_ms", 80);
     leftSpeed = speedController(cfg, "left");
     rightSpeed = speedController(cfg, "right");
@@ -149,6 +152,7 @@ class Controller_c {
 
     // Path course: stop on the end pad once the start pad is left behind
     // (not counted in a search spin, as on the StampC3).
+    if (lastLineMs == 0) runStartMs = now;
     boolean onPad = onPad();
     padCycles = (onPad && mode == FOLLOWING) ? padCycles + 1 : 0;
     if (!onPad) leftStartPad = true;
@@ -224,6 +228,11 @@ class Controller_c {
 
     // Wheel speeds: each wheel's speed controller finds the PWM.
     float v = lineSpeedMmS * slow;
+    // S-curve start from rest, as on the StampC3
+    if (lineStartRampMs > 0 && now - runStartMs < lineStartRampMs) {
+      float k = (now - runStartMs) / lineStartRampMs;
+      v *= k * k * (3 - 2 * k);
+    }
     float maxTurn = max(v - lineMinMmS, 0);
     // The integral builds up the turn a long curve needs (see the StampC3 code).
     lineTurnI = constrain(lineTurnI + error * lineKiMmS * dtS, -maxTurn, maxTurn);

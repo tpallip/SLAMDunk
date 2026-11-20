@@ -144,6 +144,7 @@ class Controller_c {
     unsigned long last_line_ms = 0;   // previous follower cycle, for the speed controllers' dt
     unsigned long follow_start_ms = 0; // when following last (re)started
     float line_turn_i = 0.0f;          // integral part of the follower's turn, mm/s
+    unsigned long run_start_ms = 0;    // first follower cycle of the run
     // Path course pads: a black band that covers all five sensors at once.
     static constexpr float PAD_LEVEL = 0.5f;   // each sensor at least this black
     static constexpr int PAD_CYCLES = 3;        // in a row, so one odd reading can't stop the run

@@ -76,6 +76,7 @@ struct RobotConfigValues_t {
   float line_gain_mm_s = 55;    // mm/s of turn per unit of DN2 - DN4, normalised
   float line_min_mm_s = 40;     // inner wheel's lowest target: below ~40 the wheels stick and slip
   float line_ki_mm_s = 0;       // mm/s of turn added per second of DN2 - DN4; 0 is off
+  float line_start_ramp_ms = 0; // S-curve from rest to full speed over this long; 0 starts at full speed
 
   // safety limits: the defaults are the maximum, config can only lower them
   float manual_max_pwm = 100;
