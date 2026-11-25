@@ -437,6 +437,8 @@ class Simulator {
       tcpAttemptInProgress = false;
       try {
         telemetryClient = new Client(applet, connectedSocket);
+        // Firmware telemetry is opt-in; request the periodic DATA stream.
+        telemetryClient.write("START TELEMETRY\n");
         tcpStatus = "TCP: connected to " + tcpHost + ":" + tcpPort;
       }
       catch (Exception error) {

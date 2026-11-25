@@ -1,0 +1,14 @@
+# Generated robot logger output
+
+/sensor_test.csv
+
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Logger session transcripts and LOG CSVs
+/logs/
+/tests/logs/
+
+# Generated experiment reports (re-create with tests/reflectance_analysis.py)
+/reports/

@@ -5,6 +5,7 @@
 #include "RobotWifiAP.h"
 #include "TaskTimer.h"
 #include "OdometryModel.h"
+#include "RobotParams.h"
 
 /**
  * @brief Supplies the nominal line-following controller for the StampC3 example.
@@ -23,27 +24,37 @@ class Controller_c {
      */
     OdometryModel_c odometry;
 
-    /** @brief Fastest interval between controller and I2C acquisition cycles. */
-    static const unsigned long UPDATE_INTERVAL_MS = 10;
-    /** @brief Interval between telemetry records in milliseconds. */
-    static const unsigned long TELEMETRY_INTERVAL_MS = 50;
-    /** @brief Number of fresh sensor readings collected for each TCP trial. */
-    static const uint16_t TRIAL_SAMPLE_COUNT = 500;
-    /** @brief Maximum line-search duration before the controller stops. */
-    static const unsigned long RECOVERY_TIMEOUT_MS = 5000;
-    /** @brief Surface-reading threshold used to decide whether a line is present. */
-    static const uint16_t LINE_THRESHOLD = 1400;
-    /** @brief Nominal forward PWM bias for line following. */
-    static constexpr float BASE_PWM = 45.0f;
-    /** @brief Proportional gain applied to the DN2-minus-DN4 surface error. */
-    static constexpr float LINE_FOLLOW_GAIN = 0.01f;
-    /** @brief Left PWM used during the one-direction line-search rotation. */
-    static constexpr float RECOVERY_LEFT_PWM = -35.0f;
-    /** @brief Right PWM used during the one-direction line-search rotation. */
-    static constexpr float RECOVERY_RIGHT_PWM = 35.0f;
+    /**
+     * @brief Runtime-tunable parameters (timing, line follower, geometry).
+     * @note Defaults are in RobotParams.h. Change them over TCP with SET; call
+     * applyParams() after changing values directly in code.
+     */
+    RobotParamsStore_c params;
+
+    /**
+     * @brief Calibrated DN1..DN5 readings: 0 = white, 1 = black, clamped.
+     * @note Updated after each successful surface read using the white_dn*
+     * and black_dn* parameters; keeps its previous value after a failed read.
+     * Raw readings remain available in robot.surface.reading.
+     */
+    float surface_norm[5];
 
     /** @brief Creates a controller in its waiting state. */
     Controller_c();
+
+    /**
+     * @brief Loads any parameters saved in flash and applies them.
+     * @note Call once from setup() after robot.initialise().
+     */
+    void begin(Robot_c &robot);
+
+    /**
+     * @brief Pushes the current parameter values into timers, odometry, and
+     * the middleware motion-helper geometry.
+     * @note Re-baselines local odometry at its current pose, because counts
+     * measured under the old geometry cannot be mixed with the new geometry.
+     */
+    void applyParams(Robot_c &robot);
 
     /** @brief Clears signal and mode state, returning the controller to waiting.
      * @note This does not reset the task timers or the local odometry estimate.
@@ -76,9 +87,9 @@ class Controller_c {
      * local odometry is updated only after a successful encoder read. The method
      * returns early between update intervals. A complete Serial line containing
      * trial_no,percentage writes one sensor CSV record; no start-button press is
-     * required. TCP telemetry is opt-in. TCP clients may send START TELEMETRY,
-     * STOP TELEMETRY, TRIAL, STATUS, MOTOR, and STOP commands; motor PWM
-     * requests are limited to -100..100.
+     * required. TCP telemetry and logging are opt-in. See tests/README.md for
+     * the full TCP command set; MOTOR requests are limited to
+     * +/- params.values.motor_pwm_limit.
      */
     void update(Robot_c &robot, RobotWifiAP_c &server);
 
@@ -95,7 +106,17 @@ class Controller_c {
     Mode mode;
     TaskTimer_c update_timer;
     TaskTimer_c telemetry_timer;
+    TaskTimer_c log_timer;
     unsigned long recovery_start_ms;
+    /** @brief bit0 surface, bit1 encoders, bit2 pose: reads that succeeded this cycle. */
+    uint8_t read_ok_mask;
+    bool tcp_log_streaming;
+    bool motion_helper_active;
+    bool motion_seen_running;
+    unsigned long motion_start_ms;
+    bool self_test_active;
+    bool self_test_seen_running;
+    unsigned long self_test_start_ms;
     char sensor_test_input[64];
     uint8_t sensor_test_input_length;
     bool sensor_test_input_overflow;
@@ -108,10 +129,13 @@ class Controller_c {
     bool tcp_trial_active;
     long tcp_trial_number;
     float tcp_trial_percentage;
-    uint16_t tcp_trial_samples_collected;
+    uint32_t tcp_trial_samples_collected;
 
-    /** @brief Returns whether cached DN3 is at or above LINE_THRESHOLD. */
+    /** @brief Returns whether normalised DN3 is at or above line_threshold. */
     bool lineDetected(const Robot_c &robot) const;
+
+    /** @brief Maps raw DN1..DN5 to 0 (white) .. 1 (black) into surface_norm. */
+    void normaliseSurface(const Robot_c &robot);
 
     /** @brief Applies the nominal controller behaviour for the current mode. */
     void runLineFollower(Robot_c &robot, unsigned long now);
@@ -154,6 +178,29 @@ class Controller_c {
      * that every cached reading was successfully refreshed in that cycle.
      */
     void publishTelemetry(Robot_c &robot, RobotWifiAP_c &server, unsigned long timestamp_ms);
+
+    /**
+     * @brief Sends one full core-state LOG record.
+     * @note Fields, in order: timestamp_ms, read_ok_mask, DN1..DN5, left_count,
+     * right_count, left_pwm, right_pwm, odom_x, odom_y, odom_theta, mw_x, mw_y,
+     * mw_theta, mode, signal, motion_state, cfg_version, DN1..DN5 normalised.
+     */
+    void publishLog(Robot_c &robot, RobotWifiAP_c &server, unsigned long timestamp_ms);
+
+    /** @brief Handles SET/GET/PARAMS/SAVE/DEFAULTS. Returns false if not a param command. */
+    bool handleParamCommand(char *line, Robot_c &robot, RobotWifiAP_c &server);
+
+    /** @brief Handles MOVE/ROTATE/SELFTEST/ODOM_RESET. Returns false if not a motion command. */
+    bool handleMotionCommand(char *line, Robot_c &robot, RobotWifiAP_c &server);
+
+    /** @brief Sends wheel geometry to the middleware helpers if it differs. */
+    void pushHelperGeometry(Robot_c &robot);
+
+    /** @brief Reports helper-motion and self-test completion once each. */
+    void pollMotionAndSelfTest(Robot_c &robot, RobotWifiAP_c &server, unsigned long now);
+
+    /** @brief Sends a line built with snprintf; refuses rather than truncates. */
+    bool sendFormatted(RobotWifiAP_c &server, const char *format, ...);
 };
 
 #endif

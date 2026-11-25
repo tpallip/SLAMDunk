@@ -27,6 +27,10 @@ void setup() {
   robot.initialise("SLAMdunk");
 //  robot.initialise("team name");
 
+  // Load runtime parameters (flash if saved, else compiled defaults) and apply
+  // them. Parameters can then be changed over TCP without reflashing.
+  controller.begin(robot);
+
 
   // Robot_c starts the shared I2C bus before RobotIMU_c uses it. IMU readings
   // come directly from the sensor ICs and do not pass through the middleware.

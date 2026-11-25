@@ -20,10 +20,13 @@ class TCPTelemetry_c {
    */
   boolean parse(String line, int arrivalMs) {
     String[] fields = split(line, ',');
-    if (fields.length != 14) return false;
+    // The firmware prefixes telemetry with "DATA"; bare 14-field records are
+    // also accepted. Other response types (ACK, TRIAL_*, ERROR) are rejected.
+    int offset = (fields.length == 15 && trim(fields[0]).equals("DATA")) ? 1 : 0;
+    if (fields.length - offset != 14) return false;
     float[] values = new float[14];
-    for (int i = 0; i < fields.length; i++) {
-      values[i] = parseFloat(trim(fields[i]));
+    for (int i = 0; i < 14; i++) {
+      values[i] = parseFloat(trim(fields[i + offset]));
       if (Float.isNaN(values[i])) return false;
     }
     timestampMs = (long)values[0];
